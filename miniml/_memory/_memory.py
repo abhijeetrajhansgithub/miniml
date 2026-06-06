@@ -60,3 +60,30 @@ class ActiveMemory:
             return None
         
         return str(self._memory[-1])
+
+    def get_memory_by_role(self, role: str) -> Optional[MemoryProfile]:
+        for mem in self._memory:
+            if mem.role == role:
+                return mem
+        return None
+    
+    def get_memory_by_stage(self, stage: str) -> Optional[MemoryProfile]:
+        for mem in self._memory:
+            if mem.stage == stage:
+                return mem
+        return None
+    
+    def get_memory_by_task(self, task: str) -> Optional[MemoryProfile]:
+        for mem in self._memory:
+            if mem.task == task:
+                return mem
+        return None
+    
+    def get_memory_by_params(self, **kwargs) -> Optional[MemoryProfile]:
+        for mem in self._memory:
+            if all(getattr(mem, key) == value for key, value in kwargs.items()):
+                return mem
+        return None
+
+    def get_last_n_memories(self, n: int) -> list[MemoryProfile]:
+        return self._memory[-n:]
