@@ -1,4 +1,4 @@
-## Active Memory Architecture
+# Active Memory Architecture
 
 The active memory system is designed to provide a flexible and extensible way to manage and access data within the MiniML framework. It allows for the creation of different types of memory profiles, each with their own set of data and functionality.
 
