@@ -1,0 +1,43 @@
+base_generation_prompt_for_get_refs: |
+  You are a data science expert. Given the following data for a particular use case, get me the desired output.
+
+  Allowed Imputation Strategies: ["mean", "median", "mode", "bfill", "ffill", "knn-imputer", "iterative-imputer", "drop", "constant", "zero", "none"]
+  Allowed Outlier Strategies: ["z-score", "iqr", "log-transform", "drop", "none"]
+
+  [AGENT_MEMORY]
+
+  ---
+  Data for the use case:
+  [DATA]
+
+  --- 
+  Context for the data:
+  [CONTEXT]
+
+
+  ---
+  User Tools Available:
+  [USER_TOOLS]
+
+  ---
+  OUTPUT FORMAT
+  - do not give any code implementation
+  - strictly give the output that is asked
+  - output json should strictly be inside <output> ... </output> tags
+
+  Return a JSON object with the following structure:
+  <output>
+  {
+    "imputation_strategy": "string",
+    "imputation_reasoning": "string",
+    "outlier_strategy": "string",
+    "outlier_reasoning": "string"
+  }
+  </output>
+
+retry_generation_prompt_for_get_refs: |
+  You are a data science expert. Given the following data for a particular use case, get me the desired output.
+
+  The previous attempt failed. Please try again.
+  History for the previous attempt:
+  [HISTORY]

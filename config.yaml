@@ -17,7 +17,7 @@ llm:
   # model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
   # model: qwen/qwen3-next-80b-a3b-instruct:free
   # model: liquid/lfm-2.5-1.2b-thinking:free
-  use_llm: false
+  use_llm: true
 
 tts:
   split: "80:20"

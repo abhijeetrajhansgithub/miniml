@@ -1,0 +1,42 @@
+base_validation_prompt_for_get_refs: |
+  You are a data science expert. Given the following data for a particular use case, validate the output and strictly return the JSON output asked.
+
+  Here is the memory that is needed:
+  [AGENT_MEMORY]
+  
+  ----
+  Data for the use case:
+  [DATA]
+
+  --- 
+  Context for the data:
+  [CONTEXT]
+  
+  ----
+  Generated output:
+  [OUTPUT]
+
+  ----
+  OUTPUT FORMAT
+  - do not give any code implementation
+  - strictly give the output that is asked
+  - output json should strictly be inside <output> ... </output> tags
+  - do not give reasoning
+
+  FINAL OUTPUT THAT IS NEEDED FROM YOU: 
+  <output>
+  {
+    "valid": "boolean [true/false]",
+    "reasoning": "string"
+  }
+  </output>
+
+
+retry_validation_prompt_for_get_refs: |
+  You are a data science expert. Given the following data for a particular use case, validate the output.
+  
+  The previous validation failed. Please review the feedback and provide a corrected output.
+  
+  Previous validation feedback:
+  [FEEDBACK]
+

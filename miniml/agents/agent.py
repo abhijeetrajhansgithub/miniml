@@ -77,17 +77,17 @@ class AgentRunnable(ABC):
 
     @abstractmethod
     def __init__(self) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def run(self) -> Any:
         """Public entry point. Returns the final result or a fallback message."""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _run_agent_loop(self) -> Optional[str] | Any:
         """Core generate -> validate loop. Returns the result or None on exhaustion."""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
@@ -95,7 +95,7 @@ class AgentRunnable(ABC):
         Call the LLM for generation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _validate(self, generated_response: str) -> Optional[Dict[str, Any]] | str:
@@ -103,7 +103,7 @@ class AgentRunnable(ABC):
         Call the LLM for validation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _call_llm(self, prompt: str, stage: str) -> Optional[str] | Dict[str, Any]:
@@ -111,12 +111,12 @@ class AgentRunnable(ABC):
         Dispatch a prompt to the configured LLM provider.
         Returns the raw string response, or None on failure.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
         """Look up and invoke a tool from the registry, then record the result."""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _load_prompt(
@@ -126,14 +126,14 @@ class AgentRunnable(ABC):
         inject_tools: bool = False,
     ) -> str:
         """Load a prompt string from a YAML file by key."""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _record(self, stage: str, task: str, data: Any) -> None:
         """Write an entry to both active memory and message history."""
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def _record_error(self, stage: str, task: str, exc: Exception) -> None:
         """Record a caught exception to memory and message history."""
-        pass
+        raise NotImplementedError
