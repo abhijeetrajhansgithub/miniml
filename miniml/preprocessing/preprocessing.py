@@ -14,7 +14,8 @@ class DataPreprocessing:
     provider: str | None = None,
     model: str | None = None,
     use_llm: bool = True,
-    _parent_base_dir_path: str = None,
+    target_column: str | None = None,
+    _parent_base_dir_path: str | None = None,
     ):
         self.data_file_path = data_file_path
         self.delimiter = delimiter
@@ -24,6 +25,7 @@ class DataPreprocessing:
         self.provider = provider
         self.model = model
         self.use_llm = use_llm
+        self.target_column = target_column
 
         assert _parent_base_dir_path is not None, "Parent base directory path is required"
         self._parent_base_dir_path = _parent_base_dir_path
@@ -70,6 +72,14 @@ class DataPreprocessing:
         for i in self._columnar_inferences:
             print(i)
             print()
+        
+
+        # Agent Target Finder
+        if self.target_column is None:
+            # TODO: Implement target finder agent
+            pass
+        
+
                 
 
 

@@ -1,6 +1,5 @@
 from typing import Optional, Dict, Any, List
-
-from urllib3 import response
+from difflib import SequenceMatcher
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, MessageRole, MessageType, BaseMessage, AgentMessage
@@ -51,7 +50,7 @@ class AgentGetRefs(AgentRunnable):
     provider: str | None = None,
     model: str | None = None,
     tools: Optional[List[Tool]] = None
-    ): 
+    ):
         assert _parent_base_dir_path is not None, "Parent base directory path is required"
         self._parent_base_dir_path = _parent_base_dir_path
 
@@ -105,7 +104,7 @@ class AgentGetRefs(AgentRunnable):
             self.PROMPT_PATHS["prompts_generation"],
             "base_generation_prompt_for_get_refs",
         )
-        
+
         self._retry_generation_prompt = self._load_prompt(
             self.PROMPT_PATHS["prompts_generation"],
             "retry_generation_prompt_for_get_refs",
@@ -121,14 +120,14 @@ class AgentGetRefs(AgentRunnable):
             "retry_validation_prompt_for_get_refs",
         )
 
-        # print the lengths of each 
+        # print the lengths of each
         print("="*50)
         print("Base generation prompt length:", len(self._base_generation_prompt))
         print("Retry generation prompt length:", len(self._retry_generation_prompt))
         print("Base validation prompt length:", len(self._base_validation_prompt))
         print("Retry validation prompt length:", len(self._retry_validation_prompt))
         print("="*50)
-    
+
     def _run_agent_loop(self) -> Optional[str] | Any:
         tries = 0
         _first_instance: Dict[str, Any] | None = None
@@ -151,19 +150,16 @@ class AgentGetRefs(AgentRunnable):
             else:
                 retry_context = ""
 
-            # Add agent memory
             current_gen_prompt = self._base_generation_prompt.replace(
                 "[AGENT_MEMORY]",
                 retry_context
             )
 
-            # Add column data description
             current_gen_prompt = current_gen_prompt.replace(
                 "[DATA]",
                 str(self.column_data)
             )
-            
-            # Add data context
+
             current_gen_prompt = current_gen_prompt.replace(
                 "[CONTEXT]",
                 self.data_context
@@ -180,7 +176,7 @@ class AgentGetRefs(AgentRunnable):
             )
 
             _parsed_data: Dict[str, Any] = _gen_parser.parse()
-            
+
             if _parsed_data.get("_instance") == "error":
                 self._record_error(
                     stage="get-refs-generation",
@@ -189,13 +185,17 @@ class AgentGetRefs(AgentRunnable):
                 )
                 _dbg("ERROR", _parsed_data.get("error"))
                 continue
-            
+
             _dbg("PARSED_DATA", _parsed_data)
-            
-            if not self.use_validator:
+
+            # FIX 1: capture _first_instance as soon as we have a valid parse,
+            # regardless of whether the validator is on
+            if _first_instance is None:
                 _first_instance = {
                     "_instance": "GetRefsEngineFrame",
                     "data": GetRefsEngineFrame(
+                        column_name=self.column,
+                        column_type=self.feature_type,
                         imputation_strategy=_parsed_data.get("imputation_strategy"),
                         imputation_reasoning=_parsed_data.get("imputation_reasoning"),
                         outlier_strategy=_parsed_data.get("outlier_strategy"),
@@ -203,214 +203,168 @@ class AgentGetRefs(AgentRunnable):
                     )
                 }
 
-                return _first_instance if _first_instance is not None else {
-                    "_instance": "GetRefsEngineFrame",
-                    "data": GetRefsEngineFrame(
-                        imputation_strategy=_parsed_data.get("imputation_strategy"),
-                        imputation_reasoning=_parsed_data.get("imputation_reasoning"),
-                        outlier_strategy=_parsed_data.get("outlier_strategy"),
-                        outlier_reasoning=_parsed_data.get("outlier_reasoning")
-                    )
-                }
+            if not self.use_validator:
+                return _first_instance
+
+            # ############################################################################
+            # VALIDATION
+            # ############################################################################
+
+            if is_retry:
+                retry_context = self._retry_validation_prompt.replace(
+                    "[FEEDBACK]",
+                    self.message_history.get_history_string()
+                )
             else:
-                if is_retry:
-                    retry_context = self._retry_validation_prompt.replace(
-                        "[FEEDBACK]",
-                        self.message_history.get_history_string()
+                retry_context = ""
+
+            current_val_prompt = self._base_validation_prompt.replace(
+                "[AGENT_MEMORY]",
+                retry_context
+            )
+
+            current_val_prompt = current_val_prompt.replace(
+               "[DATA]",
+               str(self.column_data)
+            )
+
+            current_val_prompt = current_val_prompt.replace(
+                "[CONTEXT]",
+                self.data_context
+            )
+
+            current_val_prompt = current_val_prompt.replace(
+                "[OUTPUT]", response_generated
+            )
+
+            _dbg("[VALIDATION PROMPT OUTPUT]", current_val_prompt)
+
+            response_validated = self._validate(
+                prompt=current_val_prompt
+            )
+
+            _dbg("VALIDATION", response_validated)
+
+            _val_parser = AgentGetRefsValidationParser(
+                response=response_validated
+            )
+            _val_result = _val_parser.parse()
+
+            _dbg("VALIDATION_RESULT [PARSED]", _val_result)
+
+            if _val_result.get("_instance") == "error":
+                self._record_error(
+                    stage="validation",
+                    task="validation",
+                    exc=_val_result.get("error")
+                )
+                _dbg("ERROR", _val_result.get("error"))
+                continue
+
+            if _val_result.get("_instance") == "success":
+                if _val_result.get("valid") is False:
+                    self._record(
+                        stage="get-refs-validation",
+                        task="validation",
+                        data=_val_result.get("reasoning")
                     )
                 else:
-                    retry_context = ""
-
-                # Add agent memory
-                current_val_prompt = self._base_validation_prompt.replace(
-                    "[AGENT_MEMORY]",
-                    retry_context
-                )
-
-                # Add column data description
-                current_val_prompt = current_val_prompt.replace(
-                   "[DATA]",
-                   str(self.column_data)
-                )
-
-                # Add data context
-                current_val_prompt = current_val_prompt.replace(
-                    "[CONTEXT]",
-                    self.data_context
-                )
-
-                current_val_prompt = current_val_prompt.replace(
-                    "[OUTPUT]", response_generated
-                )
-
-                response_validated = self._validate(
-                    prompt=current_val_prompt
-                )
-
-                _dbg("VALIDATION", response_validated)
-
-                _val_parser = AgentGetRefsValidationParser(
-                    response=response_validated
-                )
-                _val_result = _val_parser.parse()
-
-                _dbg("VALIDATION_RESULT [PARSED]", _val_result)
-
-                if _val_result.get("_instance") == "error":
-                    self._record_error(
-                        stage="validation",
-                        task="validation",
-                        exc=_val_result.get("error")
-                    )
-                    _dbg("ERROR", _val_result.get("error"))
-                    continue
-
-                if _val_result.get("_instance") == "success":
-                    if _val_result.get("valid") is False:
-                        self._record(
-                            stage="get-refs-validation",
-                            task="validation",
-                            data=_val_result.get("reasoning")
+                    return {
+                        "_instance": "GetRefsEngineFrame",
+                        "data": GetRefsEngineFrame(
+                            column_name=self.column,
+                            column_type=self.feature_type,
+                            imputation_strategy=_parsed_data.get("imputation_strategy"),
+                            imputation_reasoning=_parsed_data.get("imputation_reasoning"),
+                            outlier_strategy=_parsed_data.get("outlier_strategy"),
+                            outlier_reasoning=_parsed_data.get("outlier_reasoning")
                         )
-                    else:
-                        return _first_instance if _first_instance is not None else {
-                            "_instance": "GetRefsEngineFrame",
-                            "data": GetRefsEngineFrame(
-                                imputation_strategy=_parsed_data.get("imputation_strategy"),
-                                imputation_reasoning=_parsed_data.get("imputation_reasoning"),
-                                outlier_strategy=_parsed_data.get("outlier_strategy"),
-                                outlier_reasoning=_parsed_data.get("outlier_reasoning")
-                            )
-                        }
-                
-        else:
-            # Resolve retries exhaustion to return the very first valid response, else None
-            return _first_instance if _first_instance is not None else None
-            
-    
+                    }
+
+        # retries exhausted — return the first valid result we captured, else None
+        return _first_instance
+
+
     def run(self) -> Any:
         _dbg("RUN", "Starting GetRefs agent run")
         return self._run_agent_loop()
-    
+
     def _call_llm(self, prompt: str, stage: str) -> Optional[str] | Dict[str, Any]:
         options: Dict[str, Any] = {
             "temperature": 0.7,
             "top_p": 0.9,
             "max_tokens": 300,
         }
-        
+
         _dbg("LLM", f"Calling provider '{self.provider}' for stage '{stage}'")
+
         if stage == "generation":
             if self.provider == "ollama":
                 result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
                 message = result.get("message", {})
                 content = message.get("content", "")
-                raw_tool_calls = message.get("tool_calls") or []    
+                raw_tool_calls = message.get("tool_calls") or []
 
             elif self.provider == "openrouter":
                 result = get_response_openrouter(prompt=prompt, model=self.model, options_dict=options)
+                content = result.get("choices", [])[0].get("message", {}).get("content", "")
+                raw_tool_calls = result.get("choices", [])[0].get("message", {}).get("tool_calls", [])
 
-                content = result.get("choices", {}).get(0, {}).get("message", {}).get("content", "")
-                raw_tool_calls = result.get("choices", {}).get(0, {}).get("message", {}).get("tool_calls", [])
-            
+            else:
+                raise ValueError(f"Invalid provider: {self.provider}")
 
-            # ---- use content and raw_tool_calls --------
-            f_content = content
-            f_raw_tool_calls = raw_tool_calls
-
-            _dbg("LLM", f"Content: {f_content}")
-            _dbg("LLM", f"Raw tool calls: {f_raw_tool_calls}")
-
-            self._record(
-                stage="llm_call",
-                task="llm_call",
-                data={
-                    "content": f_content,
-                    "raw_tool_calls": f_raw_tool_calls,
-                }
-            )
-
-            if f_raw_tool_calls:
-                for function in f_raw_tool_calls:
-                    name = function.get("function", {}).get("name", "")
-                    arguments = function.get("function", {}).get("arguments", {})
-                    _dbg("LLM", f"Function call: {name} with arguments: {arguments}")
-
-                    self._execute_tool(
-                        tool_response={
-                            "name": name,
-                            "arguments": arguments,
-                        }
-                    )
-            
-            return f_content
-        
         elif stage == "validation":
+            # FIX 4: removed the erroneous double-nested if self.provider == "ollama"
             if self.provider == "ollama":
-                if self.provider == "ollama":
-                    result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
-                    message = result.get("message", {})
-                    content = message.get("content", "")
-                    raw_tool_calls = message.get("tool_calls") or []    
+                result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
+                message = result.get("message", {})
+                content = message.get("content", "")
+                raw_tool_calls = message.get("tool_calls") or []
 
-                elif self.provider == "openrouter":
-                    result = get_response_openrouter(prompt=prompt, model=self.model, options_dict=options)
+            elif self.provider == "openrouter":
+                result = get_response_openrouter(prompt=prompt, model=self.model, options_dict=options)
+                content = result.get("choices", [])[0].get("message", {}).get("content", "")
+                raw_tool_calls = result.get("choices", [])[0].get("message", {}).get("tool_calls", [])
 
-                    content = result.get("choices", {}).get(0, {}).get("message", {}).get("content", "")
-                    raw_tool_calls = result.get("choices", {}).get(0, {}).get("message", {}).get("tool_calls", [])
-                
-
-                # ---- use content and raw_tool_calls --------
-                f_content = content
-                f_raw_tool_calls = raw_tool_calls
-
-                _dbg("LLM", f"Content: {f_content}")
-                _dbg("LLM", f"Raw tool calls: {f_raw_tool_calls}")
-
-                self._record(
-                    stage="llm_call",
-                    task="llm_call",
-                    data={
-                        "content": f_content,
-                        "raw_tool_calls": f_raw_tool_calls,
-                    }
-                )
-
-                if f_raw_tool_calls:
-                    for function in f_raw_tool_calls:
-                        name = function.get("function", {}).get("name", "")
-                        arguments = function.get("function", {}).get("arguments", {})
-                        _dbg("LLM", f"Function call: {name} with arguments: {arguments}")
-
-                        self._execute_tool(
-                            tool_response={
-                                "name": name,
-                                "arguments": arguments,
-                            }
-                        )
-                
-                return f_content
+            else:
+                raise ValueError(f"Invalid provider: {self.provider}")
 
         else:
             raise ValueError(f"Invalid stage: {stage}")
 
-    
+        _dbg("LLM", f"Content: {content}")
+        _dbg("LLM", f"Raw tool calls: {raw_tool_calls}")
+
+        # FIX 2: removed _record call here — raw LLM dicts were polluting the
+        # feedback history fed back to the validator, causing it to loop forever
+
+        if raw_tool_calls:
+            for function in raw_tool_calls:
+                name = function.get("function", {}).get("name", "")
+                arguments = function.get("function", {}).get("arguments", {})
+                _dbg("LLM", f"Function call: {name} with arguments: {arguments}")
+
+                self._execute_tool(
+                    tool_response={
+                        "name": name,
+                        "arguments": arguments,
+                    }
+                )
+
+        return content
+
+
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
+        # FIX 3: was using undefined variable `tool_name` instead of `name`
         name = tool_response.get("name", "")
         arguments = tool_response.get("arguments", {})
-        
+
         _dbg("Tool", f"Executing tool: {name} with arguments: {arguments}")
 
-        # RESOLVE: if tool name is not an exact match, find the closest match
-        if tool_name.lower() not in TOOL_REGISTRY.get_tool_names():
-            tool_name_closest_match, tool_type = self._get_most_approximate_tool(    # type: ignore
-                tool_name=tool_name
-            )
+        if name.lower() not in TOOL_REGISTRY.get_tool_names():
+            name, _ = self._get_most_approximate_tool(tool_name=name)
 
-            # update tool name variable
-            tool_name = tool_name_closest_match
-
-        registered_tool: Tool = TOOL_REGISTRY.get_tool(name=tool_name)
+        registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
 
         tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)
 
@@ -425,7 +379,6 @@ class AgentGetRefs(AgentRunnable):
         )
 
 
-
     def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
         assert prompt is not None, "Prompt cannot be None"
 
@@ -437,7 +390,7 @@ class AgentGetRefs(AgentRunnable):
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
             return None
-        
+
         return raw_response
 
 
@@ -448,13 +401,13 @@ class AgentGetRefs(AgentRunnable):
             prompt=prompt,
             stage="validation"
         )
-        
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
             return None
-        
+
         return raw_response
-    
+
     def _record(self, stage: str, task: str, data: Any) -> None:
         _dbg("Recorder", f"Recording stage '{stage}', task '{task}', data: {data}")
 
@@ -466,21 +419,19 @@ class AgentGetRefs(AgentRunnable):
                 content=payload,
             )
         )
-        
-    
+
+
     def _record_error(self, stage: str, task: str, exc: Exception) -> None:
         _dbg("Recorder", f"Recording error for stage '{stage}', task '{task}', error: {exc}")
         labeled = f"[ERROR][stage={stage}][task={task}][type={type(exc).__name__}] {exc}"
         self._record(stage=stage, task=task, data=labeled)
-    
+
     def _load_prompt(
         self,
         yaml_key_path: str,
         prompt_key: str,
         inject_tools: bool = False,
     ) -> str:
-        """Load a prompt string from a YAML file by key."""
-
         prompt_path = Path(self._parent_base_dir_path) / yaml_key_path
 
         if not prompt_path.exists():
@@ -488,14 +439,14 @@ class AgentGetRefs(AgentRunnable):
 
         with open(prompt_path, "r") as f:
             prompts = yaml.safe_load(f)
-        
+
         prompt = prompts[prompt_key]
 
         if inject_tools:
             prompt = prompt.replace("[USER_TOOLS]", "\n".join([tool.name for tool in self._user_tools]))
-        
+
         return prompt
-    
+
 
     def _get_most_approximate_tool(self, tool_name: str) -> tuple[str, str]:
         _user_tools: list[str] = [tool.name for tool in self._user_tools]
@@ -530,7 +481,3 @@ class AgentGetRefs(AgentRunnable):
                 best_list_name = "_builtin_tools"
 
         return best_match, best_list_name
-
-
-    
-        

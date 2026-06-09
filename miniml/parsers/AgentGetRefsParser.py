@@ -75,9 +75,11 @@ class AgentGetRefsValidationParser:
             import json
             data: Dict[str, Any] = json.loads(output_content)
 
+            print("[VALIDATION DATA JSON]", data)
+
             return {
                     "_instance": "success",
-                    "valid": self.valid_map.get(data.get("valid", True).lower() if isinstance(data.get("valid", True), str) else data.get("valid", True), False),
+                    "valid": self.valid_map.get(str(data.get("valid", True)).lower(), False),
                     "reasoning": data.get("reasoning", "")
             }
         except json.JSONDecodeError:

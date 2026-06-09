@@ -14,6 +14,7 @@ base_validation_prompt_for_get_refs: |
   
   ----
   Generated output:
+  - Use this generated output to assess the final output
   [OUTPUT]
 
   ----
@@ -38,5 +39,7 @@ retry_validation_prompt_for_get_refs: |
   The previous validation failed. Please review the feedback and provide a corrected output.
   
   Previous validation feedback:
+  <feedback>
   [FEEDBACK]
+  </feedback>
 
