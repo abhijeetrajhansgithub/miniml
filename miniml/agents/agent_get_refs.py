@@ -314,7 +314,6 @@ class AgentGetRefs(AgentRunnable):
                 raise ValueError(f"Invalid provider: {self.provider}")
 
         elif stage == "validation":
-            # FIX 4: removed the erroneous double-nested if self.provider == "ollama"
             if self.provider == "ollama":
                 result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
                 message = result.get("message", {})

@@ -8,3 +8,7 @@ class GetRefsEngineFrame:
     imputation_reasoning: str
     outlier_strategy: str
     outlier_reasoning: str
+
+@dataclass
+class FindTargetEngineFrame:
+    target_column: str

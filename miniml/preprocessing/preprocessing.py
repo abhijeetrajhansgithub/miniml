@@ -1,9 +1,12 @@
 from typing import Dict, List, Any, Optional
 import pandas as pd
+
 from miniml.agents.agent_get_refs import AgentGetRefs
+from miniml.agents.agent_find_target import AgentFindTarget
+
 from pandas.api.types import is_numeric_dtype
 
-from miniml.inference.engines.engine_frame import GetRefsEngineFrame
+from miniml.inference.engines.engine_frame import GetRefsEngineFrame, FindTargetEngineFrame
 
 class DataPreprocessing:
     def __init__(self,
@@ -76,8 +79,23 @@ class DataPreprocessing:
 
         # Agent Target Finder
         if self.target_column is None:
+            print("Target name is not provided...")
             # TODO: Implement target finder agent
-            pass
+            self.find_target_agent = AgentFindTarget(
+                column_inferences=self._columnar_inferences,
+                provider=self.provider,
+                model=self.model,
+                _parent_base_dir_path=self._parent_base_dir_path
+            )
+
+            _target: Dict[str, Any] = self.find_target_agent.run()
+
+            if _target["_instance"] == "FindTargetEngineFrame":
+                if isinstance(_target["data"], FindTargetEngineFrame):
+                    self.target_column = _target["data"].target_column
+                    print(f"Target column is: {self.target_column}")
+        else:
+            print("Target name is provided...")
         
 
                 

@@ -41,3 +41,40 @@ retry_generation_prompt_for_get_refs: |
   The previous attempt failed. Please try again.
   History for the previous attempt:
   [HISTORY]
+
+
+base_generation_prompt_for_target_finder: |
+  You are a data science expert. Given the following data for a particular use case, get me the desired output.
+  You are supposed to find the most appropriate target column.
+
+  [AGENT_MEMORY]
+  
+   --- 
+  Context for the data:
+  [CONTEXT]
+
+  ---
+  User Tools Available:
+  [USER_TOOLS]
+
+  ---
+  OUTPUT FORMAT
+  - do not give any code implementation
+  - strictly give the output that is asked
+  - output json should strictly be inside <output> ... </output> tags
+
+  Return a JSON object with the following structure:
+  <output>
+  {
+    "target_column": "string"
+  }
+  </output>
+
+retry_generation_prompt_for_target_finder: |
+  You are a data science expert. Given the following data for a particular use case, get me the desired output.
+  See if the column output is correct or not. You are supposed to find the target column.
+
+  The previous attempt failed. Please try again.
+  History for the previous attempt:
+  [HISTORY]
+
