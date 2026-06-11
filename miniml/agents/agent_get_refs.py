@@ -103,21 +103,25 @@ class AgentGetRefs(AgentRunnable):
         self._base_generation_prompt = self._load_prompt(
             self.PROMPT_PATHS["prompts_generation"],
             "base_generation_prompt_for_get_refs",
+            inject_tools=True
         )
 
         self._retry_generation_prompt = self._load_prompt(
             self.PROMPT_PATHS["prompts_generation"],
             "retry_generation_prompt_for_get_refs",
+            inject_tools=True
         )
 
         self._base_validation_prompt = self._load_prompt(
             self.PROMPT_PATHS["prompts_validation"],
             "base_validation_prompt_for_get_refs",
+            inject_tools=True
         )
 
         self._retry_validation_prompt = self._load_prompt(
             self.PROMPT_PATHS["prompts_validation"],
             "retry_validation_prompt_for_get_refs",
+            inject_tools=True
         )
 
         # print the lengths of each
@@ -442,7 +446,7 @@ class AgentGetRefs(AgentRunnable):
         prompt = prompts[prompt_key]
 
         if inject_tools:
-            prompt = prompt.replace("[USER_TOOLS]", "\n".join([tool.name for tool in self._user_tools]))
+            prompt = prompt.replace("[USER_TOOLS]", "--\n".join([f"TOOL: {tool.name} FUNCTION_DESCRIPTION: {str(tool.json).replace(fr"\n", " ").replace("  ", " ")}" for tool in self._user_tools]))
 
         return prompt
 

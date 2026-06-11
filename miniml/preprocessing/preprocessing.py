@@ -5,6 +5,7 @@ from miniml.agents.agent_get_refs import AgentGetRefs
 from miniml.agents.agent_find_target import AgentFindTarget
 
 from pandas.api.types import is_numeric_dtype
+from miniml.tools.toolreg import Tool
 
 from miniml.inference.engines.engine_frame import GetRefsEngineFrame, FindTargetEngineFrame
 
@@ -18,6 +19,7 @@ class DataPreprocessing:
     model: str | None = None,
     use_llm: bool = True,
     target_column: str | None = None,
+    tools: List[Tool] = None,
     _parent_base_dir_path: str | None = None,
     ):
         self.data_file_path = data_file_path
@@ -29,6 +31,7 @@ class DataPreprocessing:
         self.model = model
         self.use_llm = use_llm
         self.target_column = target_column
+        self.tools = tools
 
         assert _parent_base_dir_path is not None, "Parent base directory path is required"
         self._parent_base_dir_path = _parent_base_dir_path
@@ -62,7 +65,8 @@ class DataPreprocessing:
                     column=column,
                     feature_type=_column_type,
                     provider=self.provider,
-                    model=self.model
+                    model=self.model,
+                    tools=self.tools
                 )
 
                 _ref: Dict[str, Any] = self.get_refs_agent.run()
@@ -85,6 +89,7 @@ class DataPreprocessing:
                 column_inferences=self._columnar_inferences,
                 provider=self.provider,
                 model=self.model,
+                tools=self.tools,
                 _parent_base_dir_path=self._parent_base_dir_path
             )
 

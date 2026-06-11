@@ -170,6 +170,7 @@ class MiniML:
                 provider=self.llm_provider,
                 model=self.llm_model,
                 use_llm=self.use_llm,
+                tools=self.ToolList,
                 _parent_base_dir_path=PARENT_BASE_DIR_PATH,
             )
     
