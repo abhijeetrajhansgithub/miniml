@@ -163,6 +163,8 @@ class AgentFindTarget(AgentRunnable):
                 self.column_inferences_json_string
             )
 
+            _dbg("[GENERATED PROMPT FINAL]", current_gen_prompt)
+
             response_generated = self._generate(
                 prompt=current_gen_prompt
             )
@@ -357,7 +359,7 @@ class AgentFindTarget(AgentRunnable):
             data={
                 "tool_name": name,
                 "tool_arguments": arguments,
-                "tool_result": tool_result,
+                "tool_result": tool_result if isinstance(tool_result, str) else None,
             }
         )
 

@@ -137,3 +137,8 @@ class AgentRunnable(ABC):
     def _record_error(self, stage: str, task: str, exc: Exception) -> None:
         """Record a caught exception to memory and message history."""
         raise NotImplementedError
+    
+    @abstractmethod
+    def _get_most_approximate_tool(self, tool_name: str) -> tuple[str, str]:
+        """Get the most appropriate tool if there is no exact tool name match"""
+        raise NotImplementedError
