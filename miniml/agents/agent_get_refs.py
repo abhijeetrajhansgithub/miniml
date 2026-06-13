@@ -169,6 +169,8 @@ class AgentGetRefs(AgentRunnable):
                 self.data_context
             )
 
+            _dbg("[GENERATED PROMPT FINAL]", current_gen_prompt)
+
             response_generated = self._generate(
                 prompt=current_gen_prompt
             )
@@ -260,7 +262,7 @@ class AgentGetRefs(AgentRunnable):
                 self._record_error(
                     stage="validation",
                     task="validation",
-                    exc=_val_result.get("error")
+                    exc=_val_result.get("error") + f" Previous Response: {_parsed_data["imputation_strategy"]} and {_parsed_data["outlier_strategy"]}"
                 )
                 _dbg("ERROR", _val_result.get("error"))
                 continue
@@ -270,7 +272,7 @@ class AgentGetRefs(AgentRunnable):
                     self._record(
                         stage="get-refs-validation",
                         task="validation",
-                        data=_val_result.get("reasoning")
+                        data=_val_result.get("reasoning")  + f" Previous Response: {_parsed_data["imputation_strategy"]} and {_parsed_data["outlier_strategy"]}"
                     )
                 else:
                     return {

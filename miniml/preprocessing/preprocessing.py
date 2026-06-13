@@ -1,8 +1,10 @@
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Literal, Optional
 import pandas as pd
+import os
 
 from miniml.agents.agent_get_refs import AgentGetRefs
 from miniml.agents.agent_find_target import AgentFindTarget
+from miniml.agents.agent_apply_refs import AgentApplyRefs
 
 from pandas.api.types import is_numeric_dtype
 from miniml.tools.toolreg import Tool
@@ -19,26 +21,28 @@ class DataPreprocessing:
     model: str | None = None,
     use_llm: bool = True,
     target_column: str | None = None,
+    output_path: str | None = None,
     tools: List[Tool] = None,
     _parent_base_dir_path: str | None = None,
     ):
         self.data_file_path = data_file_path
         self.delimiter = delimiter
-        self.encoding = encoding
+        self.encoding = encoding  # file encoding
         self.sheet_name = sheet_name
 
         self.provider = provider
         self.model = model
         self.use_llm = use_llm
         self.target_column = target_column
+        self.output_path = output_path
         self.tools = tools
 
         assert _parent_base_dir_path is not None, "Parent base directory path is required"
         self._parent_base_dir_path = _parent_base_dir_path
 
-        self.data = self.load_data()
+        self.data: pd.DataFrame = self.load_data()
 
-        self._columns = self.data.columns.tolist()
+        self._columns: List[str] = self.data.columns.tolist()
 
         # get data info upto .2f
         self._data_info = self.data.describe().round(2)
@@ -101,11 +105,53 @@ class DataPreprocessing:
                     print(f"Target column is: {self.target_column}")
         else:
             print("Target name is provided...")
+
+        
+        for inference in self._columnar_inferences:
+            self.apply_refs_agent = AgentApplyRefs(
+                column_inference=inference,
+                main_dataframe=self.data,
+                provider=self.provider,
+                model=self.model,
+                tools=self.tools,
+                _parent_base_dir_path=self._parent_base_dir_path
+            )
+            self.data: pd.DataFrame = self.apply_refs_agent.run()
         
 
+        print("Data processed successfully!")
+
+        if not self.output_path:
+            self.data.to_csv("data-processed.csv", index=False)
+
+        else:
+            path_type = self._resolve_path(self.output_path)
+
+            if path_type == "abs":
+                output_file = os.path.join(
+                    self.output_path,
+                    "data-processed.csv"
+                )
+
+            else:
+                # save to Downloads
+                output_file = (
+                    Path.home()
+                    / "Downloads"
+                    / "data-processed.csv"
+                )
+
+            self.data.to_csv(output_file, index=False)
+
+        
+    def _resolve_path(self, path: str) -> Literal["abs", "rel"]:
+        return "abs" if os.path.isabs(path) else "rel"
+
+    
+    def encode_data(self) -> None:
+        pass
+
                 
-
-
     def load_data(self) -> pd.DataFrame:
         if self.data_file_path.endswith(".csv"):
             return pd.read_csv(self.data_file_path, delimiter=self.delimiter, encoding=self.encoding)

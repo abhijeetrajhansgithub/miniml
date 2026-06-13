@@ -13,8 +13,8 @@ base_validation_prompt_for_get_refs: |
   [CONTEXT]
   
   ----
-  Generated output:
-  - Use this generated output to assess the final output
+  LATEST Generated output:
+  - Use this generated output to assess the final output strictly
   [OUTPUT]
 
   ----
@@ -56,7 +56,7 @@ base_validation_prompt_for_target_finder: |
   [CONTEXT]
 
   ----
-  Generated output:
+  LATEST Generated output:
   - Use the below generated output to assess the final output strictly
   [OUTPUT]
 
@@ -82,6 +82,108 @@ retry_validation_prompt_for_target_finder: |
   The previous validation failed. Please review the feedback and provide a corrected output.
   
   Previous validation feedback:
+  <feedback>
+  [FEEDBACK]
+  </feedback>
+
+
+base_validation_prompt_for_apply_refs_for_tool_exec: |
+  You are a data science expert. Your job is to verify whether the correct tools were selected
+  for the given imputation and outlier strategies.
+
+  Evaluate ONLY whether the tool names match the strategies in the context.
+  Ignore all other fields. Do not consider memory, arguments, or df parameters in your assessment.
+
+  ---
+  Context:
+  [CONTEXT]
+
+  ---
+  Tools that were selected:
+  [OUTPUT]
+
+  ---
+  Validation rules:
+  - The imputation_strategy in the context must have a matching tool selected
+    (e.g. "knn-imputer" requires fn_tool_knn_imputer).
+  - The outlier_strategy in the context must have a matching tool selected
+    (e.g. "z-score" requires fn_tool_zscore_outlier).
+  - If BOTH required tools are present in the selection, valid = true.
+  - If either required tool is missing or wrong, valid = false.
+  - Do not fail validation for wrong arguments, extra arguments, or missing df/cols.
+    Tool name correctness is the only criterion.
+  - If the tool name contains the strategy name in it, it is the correct tool, example: strategy: 'mode' becomes 'fn_tool_mode_imputer' and strategy: 'mean' becomes 'fn_tool_mean_imputer'
+
+  [AGENT_MEMORY]
+
+  ---
+  OUTPUT FORMAT
+  - Output JSON strictly inside <output> ... </output> tags.
+  - No code, no extra text outside the tags.
+
+  <output>
+  {
+    "valid": true,
+    "reasoning": "string"
+  }
+  </output>
+
+
+retry_validation_prompt_for_apply_refs_for_tool_exec: |
+  A previous tool selection validation failed. The failure reason is shown below.
+  Re-evaluate whether the newly selected tools match the required strategies.
+  Only assess tool name correctness against the strategies — ignore all other fields.
+
+  Previous failure reason:
+  <feedback>
+  [FEEDBACK]
+  </feedback>
+
+
+base_validation_prompt_for_apply_refs_for_proc_end: |
+  You are a data science expert. Check whether all required tools were executed
+  for the given strategies.
+
+  Both an imputation tool AND an outlier detection tool must have been used.
+  The tool names must match the strategies specified in the context.
+
+  ---
+  Context:
+  [CONTEXT]
+
+  ---
+  Confirmed tool executions:
+  [EXECUTION_HISTORY]
+
+  ---
+  Validation rules:
+  - Check that a tool matching imputation_strategy was executed.
+  - Check that a tool matching outlier_strategy was executed.
+  - If both were executed, valid = true.
+  - If either is missing, valid = false and name specifically which strategy is missing.
+
+  [AGENT_MEMORY]
+
+  ---
+  OUTPUT FORMAT
+  - Output JSON strictly inside <output> ... </output> tags.
+  - No code, no extra text outside the tags.
+  - If valid is false, reasoning must name the missing strategy.
+  - If valid is true, reasoning should be null.
+
+  <output>
+  {
+    "valid": true,
+    "reasoning": null
+  }
+  </output>
+
+
+retry_validation_prompt_for_apply_refs_for_proc_end: |
+  A previous proc-end validation failed. Review the failure reason and re-check
+  whether all required tools were executed.
+
+  Previous failure reason:
   <feedback>
   [FEEDBACK]
   </feedback>

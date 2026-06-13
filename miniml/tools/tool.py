@@ -38,22 +38,28 @@ def _python_type_to_json_type(annotation: Any) -> str:
     return "string"  # fallback
 
 
+import inspect
+from typing import Any, Callable, Dict
+
 def tool(func: Callable[..., Any]) -> Callable[..., Any]:
     _name = func.__name__
     _docstring = func.__doc__
     _signature = str(inspect.signature(func))
-    _params: Dict[Any, Any] = {}
-
-    for param in inspect.signature(func).parameters.values():
-        _params[param.name] = param.annotation
 
     if _docstring is None:
         raise ToolError("Docstring is required")
 
-    properties = {}
+    EXCLUDED_PARAMS = {"df", "cols"}
+
+    _params: Dict[str, Any] = {}
+    properties: Dict[str, Any] = {}
     required = []
 
     for param in inspect.signature(func).parameters.values():
+        if param.name.lower() in EXCLUDED_PARAMS:
+            continue
+
+        _params[param.name] = param.annotation
 
         properties[param.name] = {
             "type": _python_type_to_json_type(param.annotation),
@@ -61,7 +67,7 @@ def tool(func: Callable[..., Any]) -> Callable[..., Any]:
         }
 
         if param.default is inspect.Parameter.empty:
-            required.append(param.name)  # type: ignore
+            required.append(param.name)
 
     _json: Dict[str, Any] = {
         "type": "function",
@@ -76,12 +82,21 @@ def tool(func: Callable[..., Any]) -> Callable[..., Any]:
         }
     }
 
-    # print(_json)  # optional
+    _type = None
+    if "imputer" in _name.lower():
+        _type = "imputer" 
+    elif "outlier" in _name.lower():
+        _type = "outlier"
+    elif "scaler" in _name.lower() or "normalizer" in _name.lower() or "encoder" in _name.lower():
+        _type = "ml-prep"
+    else:
+        _type = "other"
 
     _tool = Tool(
         name=_name,
         docstring=_docstring,
         signature=_signature,
+        type=_type,
         params=_params,
         json=_json,
         func=func

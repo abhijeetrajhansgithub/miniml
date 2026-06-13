@@ -3,19 +3,14 @@ from typing import Dict, Any, Callable, List
 
 
 _builtin_tools_map_: List[str] = [
+    "fn_tool_none_imputer",
     "fn_tool_mean_imputer",
     "fn_tool_median_imputer",
     "fn_tool_mode_imputer",
-    "fn_tool_ffill_imputer",
-    "fn_tool_bfill_imputer",
-    "fn_tool_knn_imputer",
-    "fn_tool_iterative_imputer",
-    "fn_tool_constant_imputer",
-    "fn_tool_zero_imputer",
-    "fn_tool_drop_missing",
+    "fn_tool_drop_imputer",
+    "fn_tool_none_outlier",
     "fn_tool_zscore_outlier",
     "fn_tool_iqr_outlier",
-    "fn_tool_log_transform_outlier",
     "fn_tool_drop_outlier",
     "fn_tool_drop_duplicates",
     "fn_tool_standardizer",
@@ -34,6 +29,7 @@ class Tool:
     name: str
     docstring: str
     signature: str
+    type: str
     params: Dict[Any, Any]
     json: Dict[str, Any]
     func: Callable                # type: ignore

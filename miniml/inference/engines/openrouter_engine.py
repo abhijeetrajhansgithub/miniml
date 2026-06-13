@@ -14,6 +14,13 @@ def get_response_openrouter(
     if not openrouter_api_key:
         raise ValueError("OpenRouter API key is not set")
 
+    # BUG FIX 11: `headers` was used below but never defined — NameError at runtime.
+    # The Authorization header is required by the OpenRouter API.
+    headers = {
+        "Authorization": f"Bearer {openrouter_api_key}",
+        "Content-Type": "application/json",
+    }
+
     payload: Dict[str, Any] = {
         "model": model,
         "messages": [
@@ -22,6 +29,11 @@ def get_response_openrouter(
                 "content": prompt,
             }
         ],
+        # BUG FIX 12: `options_dict` was accepted as a parameter but silently ignored —
+        # temperature, top_p, and max_tokens were never forwarded to the API payload.
+        "temperature": options_dict.get("temperature", 0.7),
+        "top_p": options_dict.get("top_p", 0.9),
+        "max_tokens": options_dict.get("max_tokens", 300),
     }
 
     if tools:

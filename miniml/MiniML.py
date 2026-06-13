@@ -170,6 +170,8 @@ class MiniML:
                 provider=self.llm_provider,
                 model=self.llm_model,
                 use_llm=self.use_llm,
+                target_column=self.target_column if self.target_column else None,
+                output_path=self.output_path if self.output_path else None,
                 tools=self.ToolList,
                 _parent_base_dir_path=PARENT_BASE_DIR_PATH,
             )

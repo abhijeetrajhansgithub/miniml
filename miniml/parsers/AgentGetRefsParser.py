@@ -53,6 +53,7 @@ class AgentGetRefsValidationParser:
         "true": True,
         "false": False
     }
+    
     def __init__(self, response: str):
         self.response = response 
     

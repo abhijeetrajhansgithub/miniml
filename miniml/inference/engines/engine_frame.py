@@ -1,3 +1,4 @@
+from typing import List
 from dataclasses import dataclass
 
 @dataclass
@@ -12,3 +13,15 @@ class GetRefsEngineFrame:
 @dataclass
 class FindTargetEngineFrame:
     target_column: str
+
+
+@dataclass
+class DatasetContext:
+    n_rows: int 
+    n_cols: int 
+    target: str 
+    problem_type: str  # regression or classification
+    numeric_cols: List[str]
+    categorical_cols: List[str]
+    class_imbalance: int | float | None
+

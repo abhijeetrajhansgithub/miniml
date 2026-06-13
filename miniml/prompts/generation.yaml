@@ -2,8 +2,8 @@ base_generation_prompt_for_get_refs: |
   You are a data science expert. Given the following data for a particular use case, get me the desired output.
   Use a tool if absolutely necessary.
 
-  Allowed Imputation Strategies: ["mean", "median", "mode", "bfill", "ffill", "knn-imputer", "iterative-imputer", "drop", "constant", "zero", "none"]
-  Allowed Outlier Strategies: ["z-score", "iqr", "log-transform", "drop", "none"]
+  Allowed Imputation Strategies: ["mean", "median", "mode", "drop", "none"]
+  Allowed Outlier Strategies: ["z-score", "iqr",  "drop", "none"]
 
   [AGENT_MEMORY]
 
@@ -51,7 +51,8 @@ base_generation_prompt_for_target_finder: |
   [AGENT_MEMORY]
   
    --- 
-  Context for the data:
+  Context for the data: 
+  - Use this strictly for infering the target column. Do not use it for any other purpose.
   [CONTEXT]
 
   ---
@@ -78,4 +79,48 @@ retry_generation_prompt_for_target_finder: |
   The previous attempt failed. Please try again.
   History for the previous attempt:
   [HISTORY]
+
+base_generation_prompt_for_apply_refs: |
+  You are a data science expert in tool selection.
+  Given the context below, select the correct tool(s) to apply for the specified strategies.
+  Only select tools that directly correspond to the imputation_strategy and outlier_strategy in the context.
+  Use a tool only if it is necessary. Do not use tools unrelated to the strategies.
+
+  ---
+  Context:
+  [CONTEXT]
+
+  ---
+  User Tools Available:
+  [USER_TOOLS]
+
+  ---
+  Builtin Tools Available:
+  [BUILTIN_TOOLS]
+
+  ---
+  Rules:
+  - Select the tool whose name matches the imputation_strategy (e.g. mean-imputer becomes fn_tool_mean_imputer).
+  - Select the tool whose name matches the outlier_strategy (e.g. z-score becomes fn_tool_zscore_outlier).
+  - Do not select fn_tool_get_target or any encoding/scaling tools unless explicitly required.
+  - Do not return any code. Call the tools directly.
+
+  [AGENT_MEMORY]
+
+
+retry_generation_prompt_for_apply_refs: |
+  ---
+  Previous attempts failed. Review the failure reasons below and select the correct tools.
+  You MUST call BOTH tools — one matching imputation_strategy AND one matching outlier_strategy.
+  Do not stop after selecting only one tool.
+
+  Failure history (oldest to newest):
+  [HISTORY]
+
+
+base_generation_prompt_for_ml_planner: |
+  none
+
+retry_generation_prompt_for_ml_planner: |
+  none 
 

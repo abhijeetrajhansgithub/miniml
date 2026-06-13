@@ -19,6 +19,32 @@ from miniml.tools.tool import tool  # type: ignore
 # ============================================================================
 
 @tool
+def fn_tool_none_imputer(
+    df: pd.DataFrame,
+    cols: List[str],
+    options: Dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    """
+    Description:
+        Do not impute missing values.
+
+    Args:
+        df:
+            Input pandas dataframe.
+
+        cols:
+            List of columns to check for missing values.
+
+        options:
+            Optional configuration dictionary.
+
+    Returns:
+        pd.DataFrame:
+            Dataframe with no imputation performed.
+    """
+    return df
+
+@tool
 def fn_tool_mean_imputer(
     df: pd.DataFrame,
     cols: List[str],
@@ -133,230 +159,9 @@ def fn_tool_mode_imputer(
     return df_cpy
 
 
-@tool
-def fn_tool_ffill_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing values using forward-fill strategy.
-
-        Recommended for temporal or sequential datasets.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of sequential columns requiring
-            forward-fill imputation.
-
-        options:
-            Optional configuration dictionary.
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with forward-filled columns.
-    """
-    df_cpy = df.copy()
-
-    for col in cols:
-        df_cpy[col] = df_cpy[col].ffill()
-
-    return df_cpy
-
 
 @tool
-def fn_tool_bfill_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing values using backward-fill strategy.
-
-        Recommended for temporal or sequential datasets.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of sequential columns requiring
-            backward-fill imputation.
-
-        options:
-            Optional configuration dictionary.
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with backward-filled columns.
-    """
-    df_cpy = df.copy()
-
-    for col in cols:
-        df_cpy[col] = df_cpy[col].bfill()
-
-    return df_cpy
-
-
-@tool
-def fn_tool_knn_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing values using K-Nearest Neighbors.
-
-        Suitable for structured datasets with strong
-        feature similarity patterns.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of columns requiring KNN-based imputation.
-
-        options:
-            Optional configuration dictionary.
-            Supported keys:
-                n_neighbors (int): Number of neighbors to use. Default 5.
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with KNN-imputed columns.
-    """
-    df_cpy = df.copy()
-    n_neighbors: int = (options or {}).get("n_neighbors", 5)
-
-    imputer = KNNImputer(n_neighbors=n_neighbors)
-    df_cpy[cols] = imputer.fit_transform(df_cpy[cols])                          # type: ignore
-
-    return df_cpy
-
-
-@tool
-def fn_tool_iterative_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing values using iterative multivariate estimation.
-
-        Recommended for datasets with strong inter-feature
-        relationships.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of columns requiring iterative imputation.
-
-        options:
-            Optional configuration dictionary.
-            Supported keys:
-                max_iter (int): Maximum imputation iterations. Default 10.
-                random_state (int): Seed for reproducibility. Default 0.
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with iteratively imputed columns.
-    """
-    df_cpy = df.copy()
-    opts = options or {}
-    max_iter: int = opts.get("max_iter", 10)
-    random_state: int = opts.get("random_state", 0)
-
-    imputer = IterativeImputer(max_iter=max_iter, random_state=random_state)
-    df_cpy[cols] = imputer.fit_transform(df_cpy[cols])
-
-    return df_cpy
-
-
-@tool
-def fn_tool_constant_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing values using a fixed constant value.
-
-        Useful when a semantically meaningful placeholder
-        value is required.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of columns requiring constant-value imputation.
-
-        options:
-            Optional configuration dictionary.
-            Supported keys:
-                fill_value (any): The constant to fill with. Default "missing".
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with constant-imputed columns.
-    """
-    df_cpy = df.copy()
-    fill_value = (options or {}).get("fill_value", "missing")
-
-    for col in cols:
-        df_cpy[col] = df_cpy[col].fillna(fill_value)
-
-    return df_cpy
-
-
-@tool
-def fn_tool_zero_imputer(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Impute missing numerical values using zero.
-
-        Recommended only when zero is semantically valid.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of numerical columns requiring
-            zero-value imputation.
-
-        options:
-            Optional configuration dictionary.
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with zero-imputed columns.
-    """
-    df_cpy = df.copy()
-
-    for col in cols:
-        df_cpy[col] = df_cpy[col].fillna(0)
-
-    return df_cpy
-
-
-@tool
-def fn_tool_drop_missing(
+def fn_tool_drop_imputer(
     df: pd.DataFrame,
     cols: List[str],
     options: Dict[str, Any] | None = None,
@@ -395,6 +200,33 @@ def fn_tool_drop_missing(
 # ============================================================================
 # Outlier Tools
 # ============================================================================
+
+@tool
+def fn_tool_none_outlier(
+    df: pd.DataFrame,
+    cols: List[str],
+    options: Dict[str, Any] | None = None
+) -> pd.DataFrame:
+    """
+    Description:
+        Do not delect and process outliers.
+
+    Args:
+        df:
+            Input pandas dataframe.
+
+        cols:
+            List of columns to check for missing values.
+
+        options:
+            Optional configuration dictionary.
+
+    Returns:
+        pd.DataFrame:
+            Dataframe with no outlier processing.
+    """
+    return df
+
 
 @tool
 def fn_tool_zscore_outlier(
@@ -500,46 +332,6 @@ def fn_tool_iqr_outlier(
             df_cpy[col] = df_cpy[col].clip(lower=lower, upper=upper)
 
     return df_cpy
-
-
-@tool
-def fn_tool_log_transform_outlier(
-    df: pd.DataFrame,
-    cols: List[str],
-    options: Dict[str, Any] | None = None,
-) -> pd.DataFrame:
-    """
-    Description:
-        Apply logarithmic transformation to reduce skewness.
-
-        Effective for heavily right-skewed numerical features.
-
-    Args:
-        df:
-            Input pandas dataframe.
-
-        cols:
-            List of numerical columns requiring
-            logarithmic transformation.
-
-        options:
-            Optional configuration dictionary.
-            Supported keys:
-                shift (float): Constant added before log to handle zeros/negatives.
-                               Default 1.0 (i.e. log1p behaviour).
-
-    Returns:
-        pd.DataFrame:
-            Dataframe with transformed numerical features.
-    """
-    df_cpy = df.copy()
-    shift: float = (options or {}).get("shift", 1.0)
-
-    for col in cols:
-        df_cpy[col] = np.log(df_cpy[col] + shift)
-
-    return df_cpy
-
 
 @tool
 def fn_tool_drop_outlier(

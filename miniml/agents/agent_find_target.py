@@ -246,7 +246,7 @@ class AgentFindTarget(AgentRunnable):
                 self._record_error(
                     stage="validation",
                     task="validation",
-                    exc=_val_result.get("error")
+                    exc=_val_result.get("error") + f" Previous output: {_parsed_data.get("target_column")}"
                 )
                 _dbg("ERROR", _val_result.get("error"))
                 continue
@@ -263,7 +263,7 @@ class AgentFindTarget(AgentRunnable):
                     self._record(
                         stage="get-refs-validation",
                         task="validation",
-                        data=_val_result.get("reasoning")
+                        data=_val_result.get("reasoning")  + f" Previous output: {_parsed_data.get("target_column")}"
                     )
                 else:
                     return {
