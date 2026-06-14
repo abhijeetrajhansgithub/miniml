@@ -29,6 +29,7 @@ MessageStage = Literal[
     "proc_end_validation",
     "tool_exec_validation",
     "fallback",
+    "ml_modelling"
 ]
 
 MessageTask = Literal[
@@ -37,6 +38,7 @@ MessageTask = Literal[
     "proc_end_validation_failure",
     "tool_execution",
     "error",
+    "ml_model_selection"
 ]
 
 

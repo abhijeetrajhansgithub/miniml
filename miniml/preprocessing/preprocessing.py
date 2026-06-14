@@ -83,6 +83,18 @@ class DataPreprocessing:
         for i in self._columnar_inferences:
             print(i)
             print()
+
+        self._list_of_transformations: List[str] = []
+
+        for inf in self._columnar_inferences:
+            _impuration_strategy = inf.imputation_strategy
+            _outlier_strategy = inf.outlier_strategy
+
+            if _impuration_strategy not in self._list_of_transformations:
+                self._list_of_transformations.append(str(_impuration_strategy))
+            
+            if _outlier_strategy not in self._list_of_transformations:
+                self._list_of_transformations.append(str(_outlier_strategy))
         
 
         # Agent Target Finder
@@ -142,6 +154,9 @@ class DataPreprocessing:
                 )
 
             self.data.to_csv(output_file, index=False)
+    
+    def get_modified_data(self) -> pd.DataFrame:
+        return self.data if isinstance(self.data, pd.DataFrame) else None
 
         
     def _resolve_path(self, path: str) -> Literal["abs", "rel"]:
@@ -173,4 +188,25 @@ class DataPreprocessing:
             return "numeric"
 
         return "categorical"
+
+    def get_column_types(self) -> Dict[str, List[str]]:
+        numeric = []
+        categor = []
+
+        for column in self._columns:
+            _column_type = self.get_feature_type(column)
+
+            if _column_type == "numeric":
+                numeric.append(column)
+            elif _column_type == "categorical":
+                categor.append(column)
+        
+        return {
+            "numeric": numeric,
+            "categorical": categor
+        }
+
+
+    def get_transformations_applied(self) -> List[str]:
+        return self._list_of_transformations or []
         

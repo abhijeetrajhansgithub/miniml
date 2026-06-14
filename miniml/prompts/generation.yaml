@@ -118,9 +118,9 @@ retry_generation_prompt_for_apply_refs: |
   [HISTORY]
 
 
-base_generation_prompt_for_ml_planner: |
+base_generation_prompt_for_ml_planner_model_selection: |
   none
 
-retry_generation_prompt_for_ml_planner: |
+retry_generation_prompt_for_ml_planner_model_selection: |
   none 
 

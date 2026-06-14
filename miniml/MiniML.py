@@ -8,6 +8,7 @@ from miniml.errors.errors import ConfigFileError, ToolError
 from miniml.utils.utilities import get_encoding, get_delimiter
 from miniml._memory._memory import MemoryProfile, ActiveMemory
 from miniml.tools.toolreg import Tool, ToolRegistry
+from miniml.inference.engines.engine_frame import DatasetContext
 
 # load builtins 
 from miniml.utils._load_builtin_tools import load_tools
@@ -174,6 +175,20 @@ class MiniML:
                 output_path=self.output_path if self.output_path else None,
                 tools=self.ToolList,
                 _parent_base_dir_path=PARENT_BASE_DIR_PATH,
+            )
+
+            _preprocessed_data: pd.DataFrame = self.preprocessing.get_modified_data()
+
+            dataContx: DatasetContext = DatasetContext(
+                n_rows=_preprocessed_data.shape[0],
+                n_cols=_preprocessed_data.shape[1],
+                problem_type=self.data_modelling_type,
+                numeric_cols=self.preprocessing.get_column_types()["numeric"],
+                categorical_cols=self.preprocessing.get_column_types()["categorical"],
+                class_imbalance=None,
+                transformations_applied=self.preprocessing.get_transformations_applied(),
+                tts=self.tts_split,
+                ml_models=self.ml_models,
             )
     
     def _validate_tool(self, tool: Tool):

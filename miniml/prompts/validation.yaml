@@ -187,3 +187,10 @@ retry_validation_prompt_for_apply_refs_for_proc_end: |
   <feedback>
   [FEEDBACK]
   </feedback>
+
+
+base_validation_prompt_for_ml_planner: | 
+  none 
+
+retry_validation_prompt_for_ml_planner: |
+  none
