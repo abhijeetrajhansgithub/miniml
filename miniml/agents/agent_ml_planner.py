@@ -52,6 +52,7 @@ class AgentMLPlanner(AgentRunnable):
         usp_metrics: List[str] | None = None,
         iters: int | None = None,
         use_cross_validation: bool = False,
+        use_llm: bool = True
         **kwargs
     ):
         assert _parent_base_dir_path is not None, "Parent base directory path is required"
@@ -115,8 +116,25 @@ class AgentMLPlanner(AgentRunnable):
         
         _models_default = ["random-forest", "xgboost"]
         if self.ml_models is None or (isinstance(self.ml_models, list) and len(self.ml_models) == 0):
-            # Run Sub-Agent
             self.ml_models = _models_default
+
+        # json build the data context
+        self.data_context_json = json.dumps(
+            {
+                "n_rows": self.n_rows,
+                "n_cols": self.n_cols,
+                "target": self.target,
+                "problem_type": self.problem_type,
+                "numeric_cols": self.numeric_cols,
+                "categorical_cols": self.categorical_cols,
+                "class_imbalance": self.class_imbalance,
+                "transformations_applied": self.transformations_applied,
+                "tts": self.tts,
+                "ml_models": self.ml_models,
+            },
+            indent=4
+        )
+
 
             
 
@@ -131,6 +149,7 @@ class AgentMLPlanner(AgentRunnable):
         
         # common loop
         while tries < self.INFERENCE_TRIES_LIMIT:
+            tries += 1
             is_retry = tries > 1
 
             _dbg("SUB-AGENT LOOP", f"Iteration {tries}/{self.INFERENCE_TRIES_LIMIT}", f"is_retry={is_retry}")
@@ -151,10 +170,19 @@ class AgentMLPlanner(AgentRunnable):
                 retry_context
             )
 
-            self._generate(
+            _current_gen_prompt = _current_gen_prompt.replace(
+                "[DATA]",
+                self.data_context_json
+            )
+
+            _dbg("[SA - GENERATED FINAL PROMPT]", _current_gen_prompt)
+
+            response_generated = self._generate(
                 prompt=_current_gen_prompt,
                 sub_agent_task="model-selection"
             )
+
+            _dbg("RESPONSE", response_generated)
         
     
     def _choose_models(self):
@@ -168,6 +196,13 @@ class AgentMLPlanner(AgentRunnable):
 
     
     def _run_agent_loop(self) -> Optional[str] | Any:
+        tries = 0
+        while tries < self.INFERENCE_TRIES_LIMIT:
+
+            tries += 1
+
+            # SUB-AGENT 1: Run ML model selector
+            self._run_sub_agent("model-selection")
         pass 
 
     def run(self) -> Any:
