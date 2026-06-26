@@ -261,7 +261,7 @@ class AgentMLPlanner(AgentRunnable):
                 self._record_error(
                     stage=_stage,
                     task="generation",
-                    exc=_parsed_data.error,
+                    exc=_parsed_data.error if isinstance(_parsed_data.error, Exception) else Exception(_parsed_data.error),
                 )
                 _dbg("ERROR", _parsed_data.error)
                 continue
@@ -467,7 +467,7 @@ class AgentMLPlanner(AgentRunnable):
             )
         )
 
-    def _record_error(self, stage: str, task: str, exc: Exception | str) -> None:
+    def _record_error(self, stage: str, task: str, exc: Exception) -> None:
         """
         Generic error recorder kept for unexpected / uncategorised errors.
         Prefer the typed helpers above for known failure paths.

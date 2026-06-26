@@ -3,7 +3,7 @@ from difflib import SequenceMatcher
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, AgentMessage
-from miniml.inference.engines.engine_frame import FindTargetEngineFrame
+from miniml.inference.engines.engine_frame import FindTargetEngineFrame, LLMResponse, LLMSingleResponse, AgentParserResponse
 
 from miniml.parsers.AgentFindTargetParser import AgentFindTargetGenerationParser, AgentFindTargetValidationParser
 
@@ -169,34 +169,37 @@ class AgentFindTarget(AgentRunnable):
 
             _dbg("[GENERATED PROMPT FINAL]", current_gen_prompt)
 
-            response_generated = self._generate(
+            response_generated: LLMSingleResponse = self._generate(
                 prompt=current_gen_prompt
             )
 
-            _dbg("RESPONSE", response_generated)    # type: ignore
+            _dbg("RESPONSE", str(response_generated))    
 
             _gen_parser = AgentFindTargetGenerationParser(
-                response=response_generated          # type: ignore
+                response=response_generated.content if type(response_generated.content) == str else ""
             )
 
-            _parsed_data: Dict[str, Any] = _gen_parser.parse()
+            _parsed_data: AgentParserResponse = _gen_parser.parse()
 
-            if _parsed_data.get("_instance") == "error":
+            if _parsed_data.instance_ == "error":
+                assert type(_parsed_data.error) == str
                 self._record_error(
                     stage="find-target-generation",
                     task="generation",
-                    exc=_parsed_data.get("error")
+                    exc=_parsed_data.error if isinstance(_parsed_data.error, Exception) else Exception(_parsed_data.error)
                 )
-                _dbg("ERROR", _parsed_data.get("error"))
+                _dbg("ERROR", _parsed_data.error)
                 continue
 
-            _dbg("PARSED_DATA", _parsed_data)
+            _dbg("PARSED_DATA", str(_parsed_data))
 
             if not self.use_validator:
+                assert type(_parsed_data.target_column) == str
+
                 return {
                     "_instance": "FindTargetEngineFrame",
                     "data": FindTargetEngineFrame(
-                        target_column=_parsed_data.get("target_column")
+                        target_column=_parsed_data.target_column
                     )
                 }
             
@@ -224,52 +227,61 @@ class AgentFindTarget(AgentRunnable):
 
             current_val_prompt = current_val_prompt.replace(
                 "[OUTPUT]",
-                response_generated
+                response_generated.content if type(response_generated.content) is str else ""
             )
 
             _dbg("[VALIDATION PROMPT OUTPUT]", current_val_prompt)
 
-            response_validated = self._validate(  # fix: was passing prompt= but param was named generated_response
+            response_validated: LLMSingleResponse = self._validate(  # fix: was passing prompt= but param was named generated_response
                 prompt=current_val_prompt
             )
 
-            _dbg("VALIDATION", response_validated)
+            _dbg("VALIDATION", str(response_validated))
 
             _val_parser = AgentFindTargetValidationParser(
-                response=response_validated
+                response=response_validated.content if type(response_validated.content) is str else ""
             )
-            _val_result = _val_parser.parse()
+            _val_result: AgentParserResponse = _val_parser.parse()
 
-            _dbg("VALIDATION_RESULT [PARSED]", _val_result)
+            _dbg("VALIDATION_RESULT [PARSED]", str(_val_result))
 
-            if _val_result.get("_instance") == "error":
+            if _val_result.instance_ == "error":
+                assert type(_val_result.error) == str
+                assert type(_parsed_data.target_column) == str
+
                 self._record_error(
                     stage="validation",
                     task="validation",
-                    exc=_val_result.get("error") + f" Previous output: {_parsed_data.get("target_column")}"
+                    exc=_val_result.error + f" Previous output: {_parsed_data.target_column}"
                 )
-                _dbg("ERROR", _val_result.get("error"))
+                _dbg("ERROR", _val_result.error)
                 continue
 
-            if _val_result.get("_instance") == "success":
-                
-                if _parsed_data.get("target_column") not in TARGET_FREQ_COUNT:
-                    TARGET_FREQ_COUNT[_parsed_data.get("target_column")] = 1
+            if _val_result.instance_ == "success":
+                assert type(_parsed_data.target_column) == str
+
+                if _parsed_data.target_column not in TARGET_FREQ_COUNT:
+                    TARGET_FREQ_COUNT[_parsed_data.target_column] = 1
                 else:
-                    TARGET_FREQ_COUNT[_parsed_data.get("target_column")] += 1
+                    TARGET_FREQ_COUNT[_parsed_data.target_column] += 1
                     
 
-                if _val_result.get("valid") is False:
+                if _val_result.valid is False:
+                    assert type(_val_result.reasoning) == str
+                    assert type(_parsed_data.target_column) == str
+
                     self._record(
                         stage="get-refs-validation",
                         task="validation",
-                        data=_val_result.get("reasoning")  + f" Previous output: {_parsed_data.get("target_column")}"
+                        data=_val_result.reasoning  + f" Previous output: {_parsed_data.target_column}"
                     )
                 else:
+                    assert type(_parsed_data.target_column) == str
+
                     return {
                         "_instance": "FindTargetEngineFrame",
                         "data": FindTargetEngineFrame(
-                            target_column=_parsed_data.get("target_column")
+                            target_column=_parsed_data.target_column
                         )
                     }
         else:
@@ -284,7 +296,7 @@ class AgentFindTarget(AgentRunnable):
         _dbg("RUN", "Starting FindTarget agent run")
         return self._run_agent_loop()
 
-    def _call_llm(self, prompt: str, stage: str) -> Optional[str] | Dict[str, Any]:
+    def _call_llm(self, prompt: str, stage: str, use_tools: bool | None = True) -> LLMResponse:
         options: Dict[str, Any] = {
             "temperature": 0.7,
             "top_p": 0.9,
@@ -342,7 +354,10 @@ class AgentFindTarget(AgentRunnable):
                     }
                 )
 
-        return content
+        return LLMResponse(
+            content=content,
+            tool_calls=None
+        )
 
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
         name = tool_response.get("name", "")
@@ -367,33 +382,45 @@ class AgentFindTarget(AgentRunnable):
             }
         )
 
-    def _generate(self, prompt: str, is_retry: bool = False) -> Optional[Dict[str, Any]] | str:
+    def _generate(self, prompt: str, is_retry: bool = False) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
-        raw_response = self._call_llm(
+        _llm_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="generation"
         )
 
+        raw_response, _ = _llm_response.content, _llm_response.tool_calls
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        return raw_response
+        return LLMSingleResponse(
+            content=raw_response
+        )
 
-    def _validate(self, prompt: str) -> Optional[Dict[str, Any]] | str:  # fix: param was named generated_response but caller passed prompt=; also fix: body used undefined `prompt` instead of the parameter
+    def _validate(self, prompt: str) -> LLMSingleResponse:  # fix: param was named generated_response but caller passed prompt=; also fix: body used undefined `prompt` instead of the parameter
         assert prompt is not None, "Prompt cannot be None"
 
-        raw_response = self._call_llm(
+        _llm_val_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="validation"
         )
 
+        raw_response, _ = _llm_val_response.content, _llm_val_response.tool_calls
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        return raw_response
+        return LLMSingleResponse(
+            content=raw_response
+        )
 
     def _record(self, stage: str, task: str, data: Any) -> None:
         _dbg("Recorder", f"Recording stage '{stage}', task '{task}', data: {data}")

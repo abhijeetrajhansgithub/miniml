@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import re
-import json
-from miniml.inference.engines.engine_frame import AgentParserResponse, LLMResponse, LLMSingleResponse
+import json # type: ignore
+from miniml.inference.engines.engine_frame import AgentParserResponse
 
 class OuputTagsNotFoundError(Exception):
     """Exception raised when output tags are not found in the response."""
@@ -48,7 +48,7 @@ class AgentFindTargetGenerationParser:
                 instance_="success",
                 target_column=data.get("target_column", "")
             )
-        except json.JSONDecodeError:
+        except json.JSONDecodeError:    # type: ignore
             return AgentParserResponse(
                 instance_="error",
                 error=f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
@@ -98,7 +98,7 @@ class AgentFindTargetValidationParser:
                 valid=self.valid_map.get(str(data.get("valid", True)).lower(), False),
                 reasoning=data.get("reasoning", "")
             )
-        except json.JSONDecodeError:
+        except json.JSONDecodeError:    # type: ignore
             return AgentParserResponse(
                 instance_="error",
                 error=f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
