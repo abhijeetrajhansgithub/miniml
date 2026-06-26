@@ -219,6 +219,7 @@ class SubAgentParserResponse:
 @dataclass(slots=True)
 class AgentParserResponse:
     instance_: str
+    target_column: str | None = None
     valid: bool | None = None
     reasoning: str | None = None
     error: str | None = None
