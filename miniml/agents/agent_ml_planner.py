@@ -4,7 +4,7 @@ import json
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
-from miniml.inference.engines.engine_frame import DatasetContext
+from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse
 
 from miniml.parsers.AgentMLPlannerParser import SubAgentModelSelectionGenerationParser
 from miniml.inference.engines.ollama_engine import get_response_ollama
@@ -295,11 +295,16 @@ class AgentMLPlanner(AgentRunnable):
         _dbg("RUN", "Starting MLPlanner agent run")
         return self._run_agent_loop() or None
 
-    def _call_llm(self, prompt: str, stage: str, use_tools: bool = False) -> Optional[str] | Dict[str, Any] | Tuple[str, List[Any]]:
+    def _call_llm(self, prompt: str, stage: str, use_tools: bool | None = False) -> LLMResponse:
 
         assert self.model is not None 
         assert self.provider is not None
-        
+
+        assert prompt is not None
+        assert stage is not None
+        assert use_tools is not None
+
+
         options: Dict[str, Any] = {
             "temperature": 0.7,
             "top_p": 0.9,
@@ -327,7 +332,7 @@ class AgentMLPlanner(AgentRunnable):
             )
             message = result.get("message", {})
             content = message.get("content", "")
-            raw_tool_calls = message.get("tool_calls") or []
+            raw_tool_calls: List[Any] = message.get("tool_calls") or []
 
         elif self.provider == "openrouter":
             result = get_response_openrouter(
@@ -345,24 +350,33 @@ class AgentMLPlanner(AgentRunnable):
         _dbg("LLM", f"Content: {content}")
         _dbg("LLM", f"Raw tool calls: {raw_tool_calls}")
 
-        return content, raw_tool_calls
+        return LLMResponse(
+            content=content,
+            tool_calls=raw_tool_calls
+        )
+
+        # return content, raw_tool_calls
 
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
         pass 
 
     @override
-    def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _generate(self, prompt: str) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
-        assert sub_agent_task is not None
 
-        raw_response, raw_tool_calls = self._call_llm(
+        _llm_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="generation"
         )
 
+        raw_response, raw_tool_calls = _llm_response.content, _llm_response.tool_calls
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
-            return None
+
+            return LLMSingleResponse(
+                content=None
+            )
     
         if raw_tool_calls:
             for function in raw_tool_calls:
@@ -376,11 +390,13 @@ class AgentMLPlanner(AgentRunnable):
                 # Record the lightweight "tool call dispatched" note separately.
                 self._record_tool_call(tool_name=name)
 
-        return content
+        return LLMSingleResponse(
+            content=raw_response
+        )
             
 
 
-    def _validate(self, generated_response: str) -> Optional[Dict[str, Any]] | str:
+    def _validate(self, generated_response: str) -> LLMSingleResponse:
         pass
     
     def _get_available_models(self) -> List[str]:
@@ -391,6 +407,19 @@ class AgentMLPlanner(AgentRunnable):
 
     def _record(self, stage: str, task: str, data: Any) -> None:
         return super()._record(stage, task, data)
+    
+    def _record_tool_call(self, tool_name: str) -> None:
+        """Record that a tool was dispatched (lightweight breadcrumb)."""
+        content = f"Tool used: {tool_name}"
+        _dbg("Recorder", "tool_call", content)
+        self.message_history.add_message(
+            TaggedMessage(
+                role="assistant",
+                content=content,
+                stage="tool_execution",
+                task="tool_call",
+            )
+        )
 
     def _record_error(self, stage: str, task: str, exc: Exception) -> None:
         """

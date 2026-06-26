@@ -209,3 +209,7 @@ class MLPClassifierModel:
 class LLMResponse:
     content: str | None
     tool_calls: list[Any] | None = None
+
+@dataclass(slots=True)
+class LLMSingleResponse:
+    content: str | Dict[str, Any] | None = None

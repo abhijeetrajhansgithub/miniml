@@ -1,7 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple, List, 
-from miniml.inference.engines.engine_frame import LLMResponse
+from miniml.inference.engines.engine_frame import LLMResponse, LLMSingleResponse
 
 
 class AgentRunnable(ABC):
@@ -91,7 +91,7 @@ class AgentRunnable(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _generate(self, prompt: str) -> LLMSingleResponse:
         """
         Call the LLM for generation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
@@ -99,7 +99,7 @@ class AgentRunnable(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _validate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _validate(self, prompt: str) -> LLMSingleResponse:
         """
         Call the LLM for validation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
