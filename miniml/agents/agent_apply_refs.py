@@ -1,12 +1,12 @@
-from typing import Optional, Dict, Any, List, Callable, Tuple, override
+from typing import Optional, Dict, Any, List, Callable, Tuple, override     # type: ignore
 from difflib import SequenceMatcher
-import inspect
+import inspect      # type: ignore
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
 from miniml.parsers.AgentApplyRefsParser import AgentApplyRefsValidationParser
 from miniml.inference.engines.engine_frame import GetRefsEngineFrame, LLMSingleResponse, LLMResponse, AgentParserResponse
-from miniml.utils.utilities import unpack_arguments, is_required_parameter, get_callable_args
+from miniml.utils.utilities import unpack_arguments, is_required_parameter, get_callable_args   # type: ignore
 
 from miniml.inference.engines.ollama_engine import get_response_ollama
 from miniml.inference.engines.openrouter_engine import get_response_openrouter
@@ -145,7 +145,7 @@ class AgentApplyRefs(AgentRunnable):
         self,
         prompt: str,
         stage: str,
-        use_tools: bool = False,
+        use_tools: bool | None = True,
     ) -> LLMResponse:
         """
         Call the LLM and return (content, raw_tool_calls).
@@ -267,7 +267,7 @@ class AgentApplyRefs(AgentRunnable):
         if val_parsed.instance_ == "error":
             self._record_tool_exec_validation_failure(
                 content=f"[ERROR] Parser failed: {val_parsed.error} "
-                        f"| Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}",
+                        f"| Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls]) if raw_tool_calls else ''}",
             )
             return LLMSingleResponse(
                 content=None
@@ -281,7 +281,7 @@ class AgentApplyRefs(AgentRunnable):
                 self._record_tool_exec_validation_failure(
                     content=(
                         val_parsed.reasoning
-                        + f" | Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}"
+                        + f" | Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls]) if raw_tool_calls else ''}"
                     ),
                 )
                 
@@ -374,7 +374,7 @@ class AgentApplyRefs(AgentRunnable):
 
             response_generated: LLMSingleResponse = self._generate(prompt=gen_prompt, is_retry=is_retry)
 
-            _dbg("GENERATION RESPONSE", response_generated)
+            _dbg("GENERATION RESPONSE", str(response_generated))
 
             # Generation + tool validation failed — retry.
             if response_generated.content is None:
@@ -421,7 +421,7 @@ class AgentApplyRefs(AgentRunnable):
             val_result_parser: AgentApplyRefsValidationParser = AgentApplyRefsValidationParser(response=response_validated.content)
             val_result: AgentParserResponse = val_result_parser.parse()
 
-            _dbg("PROC-END VALIDATION PARSED", StopIteration(val_result))
+            _dbg("PROC-END VALIDATION PARSED", str(val_result))
 
             if val_result.instance_ == "error":
                 self._record_proc_end_validation_failure(
@@ -468,12 +468,12 @@ class AgentApplyRefs(AgentRunnable):
         for strategy in _tool_reqs:
             tool_name, _ = self._get_most_approximate_tool(strategy)
             tool = TOOL_REGISTRY.get_tool(tool_name)
-            self.main_dataframe = tool.func(
-                df=self.main_dataframe,
+            self.main_dataframe = tool.func(    # type: ignore
+                df=self.main_dataframe,     # type: ignore
                 cols=[self.column_inference.column_name],
             )
 
-        return self.main_dataframe
+        return self.main_dataframe  # type: ignore
 
     # ──────────────────────────────────────────────────────────────────────── #
     # TOOL EXECUTION
@@ -497,12 +497,11 @@ class AgentApplyRefs(AgentRunnable):
 
         registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
 
-        if is_required_parameter(registered_tool.func, "df"):
-            all_args["df"] = self.main_dataframe
-
-        filtered_args = get_callable_args(registered_tool.func, all_args)
+        if is_required_parameter(registered_tool.func, "df"):       # type: ignore
+            all_args["df"] = self.main_dataframe        # type: ignore
+        filtered_args = get_callable_args(registered_tool.func, all_args)       # type: ignore
         try:
-            tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)
+            tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)      # type: ignore
 
             # Tagged as stage="tool_execution", task="tool_execution" so that
             # proc-end validator can retrieve clean execution evidence via
@@ -608,7 +607,7 @@ class AgentApplyRefs(AgentRunnable):
         )
 
     def _record(self, stage: str, task: str, data: Any) -> None:
-        return super()._record(stage, task, data)
+        pass
 
     # ──────────────────────────────────────────────────────────────────────── #
     # PROMPT LOADING
