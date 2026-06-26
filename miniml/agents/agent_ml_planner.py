@@ -4,7 +4,7 @@ import json
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
-from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse
+from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse, SubAgentParserResponse
 
 from miniml.parsers.AgentMLPlannerParser import SubAgentModelSelectionGenerationParser
 from miniml.inference.engines.ollama_engine import get_response_ollama
@@ -232,34 +232,41 @@ class AgentMLPlanner(AgentRunnable):
 
             _dbg("[SA - GENERATED FINAL PROMPT]", _current_gen_prompt)
 
-            response_generated = self._generate(
-                prompt=_current_gen_prompt,
-                sub_agent_task="model-selection"
+            response_generated: LLMSingleResponse = self._generate(
+                prompt=_current_gen_prompt
             )
 
-            _dbg(f" {sub_agent_task} RESPONSE", response_generated)
+            _dbg(f" {sub_agent_task} RESPONSE", str(response_generated))
 
-            if response_generated is None:
+            if response_generated.content None:  # type: ignore
                 continue
 
-            _gen_parser = PARSER_CLASS(
-                response=response_generated
+            assert type(response_generated.content) == str
+            assert PARSER_CLASS is not None     # type: ignore
+
+            assert issubclass(PARSER_CLASS, SubAgentModelSelectionGenerationParser)    # type: ignore
+
+            _gen_parser: SubAgentModelSelectionGenerationParser = PARSER_CLASS(
+                response=response_generated.content
             )
 
-            _parsed_data: Dict[str, Any] = _gen_parser.parse()
+            _parsed_data: SubAgentParserResponse = _gen_parser.parse()
 
-            _dbg(f" {sub_agent_task} PARSED DATA", _parsed_data)
+            _dbg(f" {sub_agent_task} PARSED DATA", str(_parsed_data))
 
-            if _parsed_data.get("_instance") == "error":
+            if _parsed_data.instance_ == "error":
+                
+                assert _parsed_data.error is not None
+
                 self._record_error(
                     stage=_stage,
                     task="generation",
-                    exc=_parsed_data.get("error")
+                    exc=_parsed_data.error,
                 )
-                _dbg("ERROR", _parsed_data.get("error"))
+                _dbg("ERROR", _parsed_data.error)
                 continue
 
-            _dbg(f"{_stage}: PARSED_DATA", _parsed_data)
+            _dbg(f"{_stage}: PARSED_DATA", str(_parsed_data))
 
             if not validation:
                 return {
@@ -358,7 +365,27 @@ class AgentMLPlanner(AgentRunnable):
         # return content, raw_tool_calls
 
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
-        pass 
+        name = tool_response.get("name", "")
+        arguments = tool_response.get("arguments", {})
+
+        _dbg("Tool", f"Executing tool: {name} with arguments: {arguments}")
+
+        if name.lower() not in TOOL_REGISTRY.get_tool_names():
+            name, _ = self._get_most_approximate_tool(tool_name=name)
+
+        registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
+
+        tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)  # type: ignore
+
+        self._record(
+            stage="tool_execution",
+            task=name,
+            data={
+                "tool_name": name,
+                "tool_arguments": arguments,
+                "tool_result": tool_result if isinstance(tool_result, str) else None,
+            }
+        )
 
     @override
     def _generate(self, prompt: str) -> LLMSingleResponse:
@@ -421,7 +448,7 @@ class AgentMLPlanner(AgentRunnable):
             )
         )
 
-    def _record_error(self, stage: str, task: str, exc: Exception) -> None:
+    def _record_error(self, stage: str, task: str, exc: Exception | str) -> None:
         """
         Generic error recorder kept for unexpected / uncategorised errors.
         Prefer the typed helpers above for known failure paths.

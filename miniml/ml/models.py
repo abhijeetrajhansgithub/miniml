@@ -1,12 +1,12 @@
 # models.py
+from typing import Dict, Any
 
 # build dictionary of all best suitable models
 from sklearn.linear_model import (
     LinearRegression,
     Ridge,
     Lasso,
-    ElasticNet,
-    LogisticRegression,
+    ElasticNet
 )
 
 from sklearn.tree import (
@@ -48,7 +48,7 @@ from xgboost import (
 )
 
 
-MODELS = {
+MODELS: Dict[str, Dict[str, Any]] = {
     "regression": {
         # Linear Models
         "linear_regression": LinearRegression,

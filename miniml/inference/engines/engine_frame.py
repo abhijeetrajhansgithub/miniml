@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Literal
 from dataclasses import dataclass
 
 @dataclass
@@ -35,11 +35,6 @@ class MLPlannerPipelinePlan:
     iters: int 
     metrics: List[str]
     use_cross_validation: bool 
-
-
-
-from dataclasses import dataclass
-from typing import Literal
 
 
 # --------------------
@@ -213,3 +208,10 @@ class LLMResponse:
 @dataclass(slots=True)
 class LLMSingleResponse:
     content: str | Dict[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class SubAgentParserResponse:
+    instance_: str
+    models: List[str] | List[Any] | None = None
+    error: str | None = None
