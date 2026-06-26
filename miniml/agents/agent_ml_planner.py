@@ -12,7 +12,7 @@ from miniml.inference.engines.openrouter_engine import get_response_openrouter
 
 from miniml.tools.toolreg import ToolRegistry, Tool, get_builtin_tools
 from miniml.ml.models import MODELS             # type: ignore
-from miniml.utils.utilities import format_messages
+from miniml.utils.utilities import format_messages, unpack_arguments, is_required_parameter, get_callable_args
 
 _models_globals: Dict[str, Dict[str, Any]] | Dict[Any, Any] = MODELS
 
@@ -368,27 +368,46 @@ class AgentMLPlanner(AgentRunnable):
         name = tool_response.get("name", "")
         arguments = tool_response.get("arguments", {})
 
-        _dbg("Tool", f"Executing tool: {name} with arguments: {arguments}")
+        _dbg("Tool", f"Executing: {name}  arguments: {arguments}")
 
         if name.lower() not in TOOL_REGISTRY.get_tool_names():
             name, _ = self._get_most_approximate_tool(tool_name=name)
 
+        arguments = unpack_arguments(data=arguments)
+        _dbg("ARGUMENTS", str(arguments))
+
+        all_args = dict(arguments)
+
         registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
 
-        tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)  # type: ignore
+        filtered_args = get_callable_args(registered_tool.func, all_args)    # type: ignore
+        try:
+            tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)    # type: ignore
 
-        self._record(
-            stage="tool_execution",
-            task=name,
-            data={
-                "tool_name": name,
-                "tool_arguments": arguments,
-                "tool_result": tool_result if isinstance(tool_result, str) else None,
-            }
-        )
+            # Tagged as stage="tool_execution", task="tool_execution" so that
+            # proc-end validator can retrieve clean execution evidence via
+            # message_history.get_tagged_string(stage="tool_execution").
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=(
+                    tool_result
+                    if isinstance(tool_result, str)
+                    else f"Successfully used tool: {name} with args: {arguments}"
+                ),
+            )
+
+            if isinstance(tool_result, pd.DataFrame):
+                self.main_dataframe = tool_result
+        except:
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=f"Failed to execute tool: {name} with args: {arguments}",
+            )
 
     @override
-    def _generate(self, prompt: str) -> LLMSingleResponse:
+    def _generate(self, prompt: str, is_retry: bool = False) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
         _llm_response: LLMResponse = self._call_llm(
@@ -433,7 +452,7 @@ class AgentMLPlanner(AgentRunnable):
         return _models_globals[problem_type][model_name]
 
     def _record(self, stage: str, task: str, data: Any) -> None:
-        return super()._record(stage, task, data)
+        pass
     
     def _record_tool_call(self, tool_name: str) -> None:
         """Record that a tool was dispatched (lightweight breadcrumb)."""
@@ -463,7 +482,29 @@ class AgentMLPlanner(AgentRunnable):
                 task="error",
             )
         )
-    
+
+    def _record_tool_execution(
+        self,
+        tool_name: str,
+        arguments: Any,
+        result: str,
+    ) -> None:
+        """Record a confirmed, successfully dispatched tool execution."""
+        content = str({
+            "tool_name": tool_name,
+            "tool_arguments": arguments,
+            "tool_result": result,
+        })
+        _dbg("Recorder", "tool_execution", content)
+        self.message_history.add_message(
+            TaggedMessage(
+                role="assistant",
+                content=content,
+                stage="tool_execution",
+                task="tool_execution",
+            )
+        )
+
     # ──────────────────────────────────────────────────────────────────────── #
     # PROMPT LOADING
     # ──────────────────────────────────────────────────────────────────────── #

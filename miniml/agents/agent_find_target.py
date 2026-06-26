@@ -367,7 +367,7 @@ class AgentFindTarget(AgentRunnable):
             }
         )
 
-    def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _generate(self, prompt: str, is_retry: bool = False) -> Optional[Dict[str, Any]] | str:
         assert prompt is not None, "Prompt cannot be None"
 
         raw_response = self._call_llm(

@@ -215,3 +215,10 @@ class SubAgentParserResponse:
     instance_: str
     models: List[str] | List[Any] | None = None
     error: str | None = None
+
+@dataclass(slots=True)
+class AgentParserResponse:
+    instance_: str
+    valid: bool | None = None
+    reasoning: str | None = None
+    error: str | None = None

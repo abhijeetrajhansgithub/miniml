@@ -5,7 +5,7 @@ import inspect
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
 from miniml.parsers.AgentApplyRefsParser import AgentApplyRefsValidationParser
-from miniml.inference.engines.engine_frame import GetRefsEngineFrame
+from miniml.inference.engines.engine_frame import GetRefsEngineFrame, LLMSingleResponse, LLMResponse, AgentParserResponse
 from miniml.utils.utilities import unpack_arguments, is_required_parameter, get_callable_args
 
 from miniml.inference.engines.ollama_engine import get_response_ollama
@@ -146,7 +146,7 @@ class AgentApplyRefs(AgentRunnable):
         prompt: str,
         stage: str,
         use_tools: bool = False,
-    ) -> Tuple[str, List[Any]]:
+    ) -> LLMResponse:
         """
         Call the LLM and return (content, raw_tool_calls).
 
@@ -179,7 +179,7 @@ class AgentApplyRefs(AgentRunnable):
             )
             message = result.get("message", {})
             content = message.get("content", "")
-            raw_tool_calls = message.get("tool_calls") or []
+            raw_tool_calls: List[Any] = message.get("tool_calls") or []
 
         elif self.provider == "openrouter":
             result = get_response_openrouter(
@@ -197,20 +197,26 @@ class AgentApplyRefs(AgentRunnable):
         _dbg("LLM", f"Content: {content}")
         _dbg("LLM", f"Raw tool calls: {raw_tool_calls}")
 
-        return content, raw_tool_calls
+        return LLMResponse(
+            content=content,
+            tool_calls=raw_tool_calls,
+        )
 
     # ──────────────────────────────────────────────────────────────────────── #
     # GENERATION: build prompt → call LLM (with tools) →
     #             validate tool selection → execute tools.
     # ──────────────────────────────────────────────────────────────────────── #
-    def _generate(self, prompt: str, is_retry: bool) -> Optional[str]:
+    @override
+    def _generate(self, prompt: str, is_retry: bool = False) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
-        content, raw_tool_calls = self._call_llm(
+        _llm_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="generation",
             use_tools=True,
         )
+
+        content, raw_tool_calls = _llm_response.content, _llm_response.tool_calls
 
         _dbg("GENERATE", f"content={content!r}  tool_calls={raw_tool_calls}")
 
@@ -242,35 +248,46 @@ class AgentApplyRefs(AgentRunnable):
 
         _dbg("VALIDATION TOOL CHECK PROMPT", val_prompt_tool)
 
-        val_content, _ = self._call_llm(
+        _llm_val_response: LLMResponse = self._call_llm(
             prompt=val_prompt_tool,
             stage="validation",
             use_tools=False,
         )
 
-        _dbg("VALIDATION TOOL CHECK RESPONSE", val_content)
+        _dbg("VALIDATION TOOL CHECK RESPONSE", str(_llm_val_response))
 
-        val_parser = AgentApplyRefsValidationParser(response=val_content)
-        val_parsed = val_parser.parse()
+        # assertion check
+        assert type(_llm_val_response.content) == str
 
-        _dbg("VALIDATION TOOL CHECK PARSED", val_parsed)
+        val_parser: AgentApplyRefsValidationParser = AgentApplyRefsValidationParser(response=_llm_val_response.content)
+        val_parsed: AgentParserResponse = val_parser.parse()
 
-        if val_parsed.get("_instance") == "error":
+        _dbg("VALIDATION TOOL CHECK PARSED", str(val_parsed))
+
+        if val_parsed.instance_ == "error":
             self._record_tool_exec_validation_failure(
-                content=f"[ERROR] Parser failed: {val_parsed.get('error')} "
+                content=f"[ERROR] Parser failed: {val_parsed.error} "
                         f"| Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}",
             )
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        if val_parsed.get("_instance") == "success":
-            if val_parsed.get("valid") is False:
+        if val_parsed.instance_ == "success":
+            if val_parsed.valid is False:
+                
+                assert val_parsed.reasoning is not None
+
                 self._record_tool_exec_validation_failure(
                     content=(
-                        val_parsed.get("reasoning", "")
+                        val_parsed.reasoning
                         + f" | Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}"
                     ),
                 )
-                return None
+                
+                return LLMSingleResponse(
+                    content=None
+                )
 
         # ── Execute tools ─────────────────────────────────────────────────── #
         if raw_tool_calls:
@@ -285,25 +302,33 @@ class AgentApplyRefs(AgentRunnable):
                 # Record the lightweight "tool call dispatched" note separately.
                 self._record_tool_call(tool_name=name)
 
-        return content
+        return LLMSingleResponse(
+            content=content
+        )
 
     # ──────────────────────────────────────────────────────────────────────── #
     # VALIDATION (proc-end only): pure LLM text call, no tool execution.
     # ──────────────────────────────────────────────────────────────────────── #
-    def _validate(self, prompt: str) -> Optional[str]:
+    def _validate(self, prompt: str) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
-        content, _ = self._call_llm(    
+        _llm_response: LLMResponse = self._call_llm(    
             prompt=prompt,
             stage="validation",
             use_tools=False,
         )
 
+        content, _ = _llm_response.content, _llm_response.tool_calls
+
         if not content:
             _dbg("VALIDATE", "LLM returned empty content")
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        return content
+        return LLMSingleResponse(
+            content=content
+        )
 
     # ──────────────────────────────────────────────────────────────────────── #
     # MAIN LOOP
@@ -347,12 +372,12 @@ class AgentApplyRefs(AgentRunnable):
 
             _dbg("GENERATION PROMPT", gen_prompt)
 
-            response_generated = self._generate(prompt=gen_prompt, is_retry=is_retry)
+            response_generated: LLMSingleResponse = self._generate(prompt=gen_prompt, is_retry=is_retry)
 
             _dbg("GENERATION RESPONSE", response_generated)
 
             # Generation + tool validation failed — retry.
-            if response_generated is None:
+            if response_generated.content is None:
                 continue
 
             # ── Proc-end validation ───────────────────────────────────────── #
@@ -386,37 +411,43 @@ class AgentApplyRefs(AgentRunnable):
 
             _dbg("PROC-END VALIDATION PROMPT", val_prompt)
 
-            response_validated = self._validate(prompt=val_prompt)
+            response_validated: LLMSingleResponse = self._validate(prompt=val_prompt)
 
-            _dbg("PROC-END VALIDATION RESPONSE", response_validated)
+            _dbg("PROC-END VALIDATION RESPONSE", str(response_validated))
 
-            val_result = AgentApplyRefsValidationParser(response=response_validated)
-            val_result = val_result.parse()
+            # Validation failed — retry.
+            if type(response_validated.content) is not str: continue
 
-            _dbg("PROC-END VALIDATION PARSED", val_result)
+            val_result_parser: AgentApplyRefsValidationParser = AgentApplyRefsValidationParser(response=response_validated.content)
+            val_result: AgentParserResponse = val_result_parser.parse()
 
-            if val_result.get("_instance") == "error":
+            _dbg("PROC-END VALIDATION PARSED", StopIteration(val_result))
+
+            if val_result.instance_ == "error":
                 self._record_proc_end_validation_failure(
                     content=(
-                        f"[ERROR] Parser failed: {val_result.get('error')} "
+                        f"[ERROR] Parser failed: {val_result.error} "
                         f"| imputation={self.column_inference.imputation_strategy}"
                         f", outlier={self.column_inference.outlier_strategy}"
                     ),
                 )
                 continue
 
-            if val_result.get("_instance") == "success":
-                if val_result.get("valid") is False:
+            if val_result.instance_ == "success":
+                if val_result.valid is False:
+
+                    assert val_result.reasoning is not None
+
                     self._record_proc_end_validation_failure(
                         content=(
-                            val_result.get("reasoning", "")
+                            val_result.reasoning
                             + f" | imputation={self.column_inference.imputation_strategy}"
                             + f", outlier={self.column_inference.outlier_strategy}"
                         ),
                     )
                     continue
                 else:
-                    return self.main_dataframe
+                    return self.main_dataframe   # type: ignore
 
         # Exhausted retries — fall back to deterministic execution.
         return self._run_manual_tool_exec()

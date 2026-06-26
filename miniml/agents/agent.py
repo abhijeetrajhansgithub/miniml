@@ -91,7 +91,7 @@ class AgentRunnable(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _generate(self, prompt: str) -> LLMSingleResponse:
+    def _generate(self, prompt: str, is_retry: bool = False) -> LLMSingleResponse:
         """
         Call the LLM for generation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
