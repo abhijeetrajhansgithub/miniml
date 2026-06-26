@@ -5,10 +5,11 @@ import json
 import re
 import math
 import inspect
-from typing import Any, Dict, List, Tuple, cast, Optional             # type: ignore
+from typing import Any, Dict, List, Tuple, cast, Optional, Callable          # type: ignore
 
 from miniml._memory._memory import MemoryProfile
 from miniml.errors.errors import DatasetInferencingError
+from miniml._messages.messages import TaggedMessage
 
 def get_encoding(file_path: str) -> str:
     return from_path(file_path).best().encoding                       # type: ignore
@@ -32,10 +33,10 @@ def unpack(value: Any) -> Any:
             return value
 
     if isinstance(parsed, dict):
-        return {k: unpack(v) for k, v in parsed.items()}
+        return {k: unpack(v) for k, v in parsed.items()}    # type: ignore
 
     if isinstance(parsed, list):
-        return [unpack(v) for v in parsed]
+        return [unpack(v) for v in parsed]                  # type: ignore
 
     return parsed
 
@@ -49,11 +50,18 @@ def is_required_parameter(func, param_name) -> bool:
     return param.default is inspect.Parameter.empty
 
 
-def get_callable_args(func, all_args) -> Dict[Any, Any]:
+def get_callable_args(func: Callable[..., Any], all_args: Dict[Any, Any]) -> Dict[Any, Any]:
     sig = inspect.signature(func)
 
     return {
         name: value
-        for name, value in all_args.items()
+        for name, value in all_args.items()                 # type: ignore
         if name in sig.parameters
     }
+
+
+def format_messages(messages: list[TaggedMessage]) -> str:
+    return "\n".join(
+        f"{m.role}: {m.content}"
+        for m in messages
+    )

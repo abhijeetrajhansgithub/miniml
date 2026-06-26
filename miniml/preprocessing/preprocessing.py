@@ -118,6 +118,9 @@ class DataPreprocessing:
         else:
             print("Target name is provided...")
 
+        self.final_target_column = self.target_column
+        assert self.final_target_column is not None, "Target can not be None"
+
         
         for inference in self._columnar_inferences:
             self.apply_refs_agent = AgentApplyRefs(
@@ -209,4 +212,7 @@ class DataPreprocessing:
 
     def get_transformations_applied(self) -> List[str]:
         return self._list_of_transformations or []
+    
+    def get_target(self) -> str:
+        return self.final_target_column
         

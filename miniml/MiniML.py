@@ -17,6 +17,7 @@ load_tools()
 
 from miniml.inference.engines.engine_frame import GetRefsEngineFrame
 from miniml.preprocessing.preprocessing import DataPreprocessing
+from miniml.agents.agent_ml_planner import AgentMLPlanner
 
 # Base directory
 PARENT_BASE_DIR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -182,6 +183,7 @@ class MiniML:
             dataContx: DatasetContext = DatasetContext(
                 n_rows=_preprocessed_data.shape[0],
                 n_cols=_preprocessed_data.shape[1],
+                target=self.preprocessing.get_target(),
                 problem_type=self.data_modelling_type,
                 numeric_cols=self.preprocessing.get_column_types()["numeric"],
                 categorical_cols=self.preprocessing.get_column_types()["categorical"],
@@ -190,6 +192,18 @@ class MiniML:
                 tts=self.tts_split,
                 ml_models=self.ml_models,
             )
+
+            ml_planner_agent = AgentMLPlanner(
+                _parent_base_dir_path=PARENT_BASE_DIR_PATH,
+                data_context=dataContx,
+                usp_models=self.ml_models,
+                usp_metrics=self.metrics,
+                iters=self.iters,
+                use_cross_validation=self.use_cv,
+                use_llm=self.use_llm
+            )
+
+            ml_planner_agent.run()
     
     def _validate_tool(self, tool: Tool):
         if tool.name is None or len(tool.name) == 0:               # type: ignore

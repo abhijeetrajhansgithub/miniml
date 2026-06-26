@@ -5,6 +5,7 @@ base_generation_prompt_for_get_refs: |
   Allowed Imputation Strategies: ["mean", "median", "mode", "drop", "none"]
   Allowed Outlier Strategies: ["z-score", "iqr",  "drop", "none"]
 
+  Here is the memory that is needed:
   [AGENT_MEMORY]
 
   ---
@@ -48,6 +49,7 @@ base_generation_prompt_for_target_finder: |
   You are a data science expert. Given the following data for a particular use case, get me the desired output.
   You are supposed to find the most appropriate target column. Use a tool if absolutely necessary.
 
+  Here is the memory that is needed:
   [AGENT_MEMORY]
   
    --- 
@@ -104,6 +106,7 @@ base_generation_prompt_for_apply_refs: |
   - Select the tool whose name matches the outlier_strategy (e.g. z-score becomes fn_tool_zscore_outlier).
   - Do not select fn_tool_get_target or any encoding/scaling tools unless explicitly required.
   - Do not return any code. Call the tools directly.
+  - options cannot contain 'cols' and 'df' strictly.
 
   [AGENT_MEMORY]
 
@@ -119,8 +122,38 @@ retry_generation_prompt_for_apply_refs: |
 
 
 base_generation_prompt_for_ml_planner_model_selection: |
-  none
+  You are an expert in machiine learning modeling. Your task is to pick the right models for the dataset.
+  The task for the project is [task].
+
+  Pick the suitable ML models for thee given task.
+  Options: [MODEL_OPTIONS]
+
+  Here is the memory that is needed:
+  [AGENT_MEMORY]
+
+  Here is the context for the data:
+  [DATA]
+
+  ---
+  OUTPUT FORMAT
+  - do not give any code implementation
+  - strictly give the output that is asked
+  - output json should strictly be inside <output> ... </output> tags
+  - Choose atleast two models
+
+  Return a JSON object with the following structure:
+  <output>
+  {
+    "model": "string""
+  }
+  </output>
+
+
+
+
 
 retry_generation_prompt_for_ml_planner_model_selection: |
-  none 
+  The previous attempt failed. Please try again.
+  History for the previous attempt:
+  [HISTORY]
 

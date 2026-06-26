@@ -1,6 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, List, 
+from miniml.inference.engines.engine_frame import LLMResponse
 
 
 class AgentRunnable(ABC):
@@ -98,20 +99,26 @@ class AgentRunnable(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _validate(self, generated_response: str) -> Optional[Dict[str, Any]] | str:
+    def _validate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
         """
         Call the LLM for validation and parse the response.
         Returns a typed dict with '_instance' key, or None on parse failure.
         """
         raise NotImplementedError
-
+    
     @abstractmethod
-    def _call_llm(self, prompt: str, stage: str) -> Optional[str] | Dict[str, Any]:
+    def _call_llm(
+        self,
+        prompt: str,
+        stage: str,
+        use_tools: bool | None = None,
+    ) -> LLMResponse:
         """
         Dispatch a prompt to the configured LLM provider.
-        Returns the raw string response, or None on failure.
         """
         raise NotImplementedError
+
+    # TODO: Refactor agent code to incorporate LLMResponse dataclass
 
     @abstractmethod
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:

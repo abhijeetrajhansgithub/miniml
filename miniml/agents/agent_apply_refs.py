@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List, Callable, Tuple, override
 from difflib import SequenceMatcher
 import inspect
 
@@ -16,7 +16,6 @@ from miniml.tools.toolreg import ToolRegistry, Tool, get_builtin_tools
 _builtin_tools_names = get_builtin_tools()
 
 import yaml
-import json
 from pathlib import Path
 import pandas as pd
 
@@ -46,7 +45,7 @@ class AgentApplyRefs(AgentRunnable):
     def __init__(self,
         column_inference: GetRefsEngineFrame,
         main_dataframe: pd.DataFrame,
-        _parent_base_dir_path: str = None,
+        _parent_base_dir_path: str | None = None,
         tools: Optional[List[Tool]] = None,
         provider: str | None = None,
         model: str | None = None,
@@ -147,7 +146,7 @@ class AgentApplyRefs(AgentRunnable):
         prompt: str,
         stage: str,
         use_tools: bool = False,
-    ) -> tuple[str, list]:
+    ) -> Tuple[str, List[Any]]:
         """
         Call the LLM and return (content, raw_tool_calls).
 
@@ -160,7 +159,7 @@ class AgentApplyRefs(AgentRunnable):
             "max_tokens": 300,
         }
 
-        _tools = []
+        _tools: List[Any] = []
         if use_tools:
             for tool in self._builtin_tools:
                 if tool.type.lower() in ["imputer", "outlier"]:
@@ -238,7 +237,7 @@ class AgentApplyRefs(AgentRunnable):
         )
         val_prompt_tool = val_prompt_tool.replace(
             "[OUTPUT]",
-            f"Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}",
+            f"Tools selected: {', '.join([f.get('function').get('name') for f in raw_tool_calls])}",   # type: ignore
         )
 
         _dbg("VALIDATION TOOL CHECK PROMPT", val_prompt_tool)
@@ -294,7 +293,7 @@ class AgentApplyRefs(AgentRunnable):
     def _validate(self, prompt: str) -> Optional[str]:
         assert prompt is not None, "Prompt cannot be None"
 
-        content, _ = self._call_llm(
+        content, _ = self._call_llm(    
             prompt=prompt,
             stage="validation",
             use_tools=False,
@@ -471,23 +470,30 @@ class AgentApplyRefs(AgentRunnable):
             all_args["df"] = self.main_dataframe
 
         filtered_args = get_callable_args(registered_tool.func, all_args)
-        tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)
+        try:
+            tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)
 
-        # Tagged as stage="tool_execution", task="tool_execution" so that
-        # proc-end validator can retrieve clean execution evidence via
-        # message_history.get_tagged_string(stage="tool_execution").
-        self._record_tool_execution(
-            tool_name=name,
-            arguments=arguments,
-            result=(
-                tool_result
-                if isinstance(tool_result, str)
-                else f"Successfully used tool: {name} with args: {arguments}"
-            ),
-        )
+            # Tagged as stage="tool_execution", task="tool_execution" so that
+            # proc-end validator can retrieve clean execution evidence via
+            # message_history.get_tagged_string(stage="tool_execution").
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=(
+                    tool_result
+                    if isinstance(tool_result, str)
+                    else f"Successfully used tool: {name} with args: {arguments}"
+                ),
+            )
 
-        if isinstance(tool_result, pd.DataFrame):
-            self.main_dataframe = tool_result
+            if isinstance(tool_result, pd.DataFrame):
+                self.main_dataframe = tool_result
+        except:
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=f"Failed to execute tool: {name} with args: {arguments}",
+            )
 
     # ──────────────────────────────────────────────────────────────────────── #
     # TYPED RECORD HELPERS

@@ -315,9 +315,14 @@ def fn_tool_iqr_outlier(
             Dataframe with processed outliers.
     """
     df_cpy = df.copy()
-    opts = options or {}
-    factor: float = opts.get("factor", 1.5)
-    strategy: str = opts.get("strategy", "clip")
+    opts: dict | Any = options or {}
+
+    if isinstance(opts, dict):
+        factor: float = opts.get("factor", 1.5)
+        strategy: str = opts.get("strategy", "clip")
+    else:
+        factor: float = 1.5
+        strategy: str = "clip"
 
     for col in cols:
         q1 = df_cpy[col].quantile(0.25)

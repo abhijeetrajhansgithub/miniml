@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 
 @dataclass
@@ -205,3 +205,7 @@ class MLPClassifierModel:
 
 
 
+@dataclass(slots=True)
+class LLMResponse:
+    content: str | None
+    tool_calls: list[Any] | None = None

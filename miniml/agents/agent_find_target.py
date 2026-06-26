@@ -1,8 +1,8 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, override
 from difflib import SequenceMatcher
 
 from miniml.agents.agent import AgentRunnable
-from miniml._messages.messages import MessageHistory, MessageRole, MessageType, BaseMessage, AgentMessage
+from miniml._messages.messages import MessageHistory, AgentMessage
 from miniml.inference.engines.engine_frame import FindTargetEngineFrame
 
 from miniml.parsers.AgentFindTargetParser import AgentFindTargetGenerationParser, AgentFindTargetValidationParser
@@ -48,18 +48,18 @@ class AgentFindTarget(AgentRunnable):
         model: str | None = None,
         tools: List[Tool] | None = None,
         use_validator: bool = True,
-        _parent_base_dir_path: str = None
+        _parent_base_dir_path: str | None = None
     ):
         self.column_inferences: Dict[str, Dict[str, str]] = dict()
 
         for elem in column_inferences:
-            self.column_inferences[elem.column_name] = {
-                "column_name": elem.column_name,
-                "column_type": elem.column_type,
-                "imputation_strategy": elem.imputation_strategy,
-                "imputation_reasoning": elem.imputation_reasoning,
-                "outlier_strategy": elem.outlier_strategy,
-                "outlier_reasoning": elem.outlier_reasoning
+            self.column_inferences[elem.column_name]: Dict[str, Any] = {      # type: ignore
+                "column_name": elem.column_name,                # type: ignore
+                "column_type": elem.column_type,                # type: ignore
+                "imputation_strategy": elem.imputation_strategy,                # type: ignore
+                "imputation_reasoning": elem.imputation_reasoning,              # type: ignore
+                "outlier_strategy": elem.outlier_strategy,              # type: ignore
+                "outlier_reasoning": elem.outlier_reasoning             # type: ignore
             }
         
         assert provider is not None, "Provider is required"
@@ -134,7 +134,7 @@ class AgentFindTarget(AgentRunnable):
     
     def _run_agent_loop(self) -> Optional[str] | Any:
 
-        TARGET_FREQ_COUNT = dict()
+        TARGET_FREQ_COUNT: Dict[str, int] = dict()
 
         tries = 0
         _first_instance: Dict[str, Any] | None = None
@@ -173,10 +173,10 @@ class AgentFindTarget(AgentRunnable):
                 prompt=current_gen_prompt
             )
 
-            _dbg("RESPONSE", response_generated)
+            _dbg("RESPONSE", response_generated)    # type: ignore
 
             _gen_parser = AgentFindTargetGenerationParser(
-                response=response_generated
+                response=response_generated          # type: ignore
             )
 
             _parsed_data: Dict[str, Any] = _gen_parser.parse()
@@ -276,7 +276,7 @@ class AgentFindTarget(AgentRunnable):
             return {
                 "_instance": "FindTargetEngineFrame",
                 "data": FindTargetEngineFrame(
-                    target_column=max(TARGET_FREQ_COUNT, key=TARGET_FREQ_COUNT.get)
+                    target_column=max(TARGET_FREQ_COUNT, key=TARGET_FREQ_COUNT.get)    # type: ignore
                 )
             }
 
@@ -313,7 +313,7 @@ class AgentFindTarget(AgentRunnable):
                 result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
                 message = result.get("message", {})
                 content = message.get("content", "")
-                raw_tool_calls = message.get("tool_calls") or []
+                raw_tool_calls: List[Any] = message.get("tool_calls") or []
 
             elif self.provider == "openrouter":
                 result = get_response_openrouter(prompt=prompt, model=self.model, options_dict=options)
@@ -330,9 +330,9 @@ class AgentFindTarget(AgentRunnable):
         _dbg("LLM", f"Raw tool calls: {raw_tool_calls}")
 
         if raw_tool_calls:
-            for function in raw_tool_calls:
-                name = function.get("function", {}).get("name", "")
-                arguments = function.get("function", {}).get("arguments", {})
+            for function in raw_tool_calls:     # type: ignore
+                name = function.get("function", {}).get("name", "")     # type: ignore
+                arguments = function.get("function", {}).get("arguments", {})       # type: ignore
                 _dbg("LLM", f"Function call: {name} with arguments: {arguments}")
 
                 self._execute_tool(
@@ -355,7 +355,7 @@ class AgentFindTarget(AgentRunnable):
 
         registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
 
-        tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)
+        tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)  # type: ignore
 
         self._record(
             stage="tool_execution",
@@ -408,9 +408,15 @@ class AgentFindTarget(AgentRunnable):
         )
 
 
-    def _record_error(self, stage: str, task: str, exc: Exception) -> None:
+    def _record_error(self, stage: str, task: str, exc: Exception | str) -> None:
         _dbg("Recorder", f"Recording error for stage '{stage}', task '{task}', error: {exc}")
-        labeled = f"[ERROR][stage={stage}][task={task}][type={type(exc).__name__}] {exc}"
+        if isinstance(exc, Exception):
+            labeled = f"[ERROR][stage={stage}][task={task}][type={type(exc).__name__}] {exc}"
+        elif isinstance(exc, str):  # type: ignore
+            labeled = f"[ERROR][stage={stage}][task={task}][type={type(exc).__name__}] {exc}"
+        else:
+            labeled = f"[ERROR][stage={stage}][task={task}][type={type(exc).__name__}] {exc}"
+
         self._record(stage=stage, task=task, data=labeled)
 
 

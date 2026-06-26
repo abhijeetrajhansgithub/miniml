@@ -48,7 +48,7 @@ from xgboost import (
 )
 
 
-_MODELS = {
+MODELS = {
     "regression": {
         # Linear Models
         "linear_regression": LinearRegression,
