@@ -219,7 +219,16 @@ class SubAgentParserResponse:
 @dataclass(slots=True)
 class AgentParserResponse:
     instance_: str
+    data: Any | None = None
     target_column: str | None = None
     valid: bool | None = None
     reasoning: str | None = None
     error: str | None = None
+
+
+@dataclass(slots=True)
+class AgentGetRefsIOResponse:
+    imputation_strategy: str | None = None
+    imputation_reasoning: str | None = None
+    outlier_strategy: str | None = None
+    outlier_reasoning: str | None = None

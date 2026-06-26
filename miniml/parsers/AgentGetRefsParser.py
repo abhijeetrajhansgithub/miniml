@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import re
-
-from numpy.matlib import True_
+import json
+from miniml.inference.engines.engine_frame import AgentParserResponse, AgentGetRefsIOResponse
 
 class OuputTagsNotFoundError(Exception):
     """Exception raised when output tags are not found in the response."""
@@ -15,37 +15,53 @@ class AgentGetRefsGenerationParser:
     def __init__(self, response: str):
         self.response = response
     
-    def parse(self) -> Dict[str, Any]:
+    def parse(self) -> AgentParserResponse:
         if not "<output>" in self.response.lower() or not "</output>" in self.response.lower():
-            return {
-                "_instance": "error",
-                "error": f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
-            }
+            try:
+                import json
+                data: Dict[str, Any] = json.loads(self.response)
+
+                return AgentParserResponse(
+                    instance_="success",
+                    data=AgentGetRefsIOResponse(
+                        imputation_strategy=data.get("imputation_strategy", ""),
+                        imputation_reasoning=data.get("imputation_reasoning", ""),
+                        outlier_strategy=data.get("outlier_strategy", ""),
+                        outlier_reasoning=data.get("outlier_reasoning", "")
+                    )
+                )
+            except:
+                return AgentParserResponse(
+                    instance_="error",
+                    error=f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
+                )
 
         match = re.search(r"<output>(.*?)</output>", self.response, re.DOTALL)
         if not match:
-            return {
-                "_instance": "error",
-                "error": f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
-            }
+            return AgentParserResponse(
+                instance_="error",
+                error=f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
+            )
         
         output_content = match.group(1).strip()
         try:
             import json
             data: Dict[str, Any] = json.loads(output_content)
 
-            return {
-                "_instance": "success",
-                "imputation_strategy": data.get("imputation_strategy", ""),
-                "imputation_reasoning": data.get("imputation_reasoning", ""),
-                "outlier_strategy": data.get("outlier_strategy", ""),
-                "outlier_reasoning": data.get("outlier_reasoning", "")
-            }
-        except json.JSONDecodeError:
-            return {
-                "_instance": "error",
-                "error": f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
-            }
+            return AgentParserResponse(
+                instance_="success",
+                data=AgentGetRefsIOResponse(
+                    imputation_strategy=data.get("imputation_strategy", ""),
+                    imputation_reasoning=data.get("imputation_reasoning", ""),
+                    outlier_strategy=data.get("outlier_strategy", ""),
+                    outlier_reasoning=data.get("outlier_reasoning", "")
+                )
+            )
+        except json.JSONDecodeError:    # type: ignore
+            return AgentParserResponse(
+                instance_="error",
+                error=f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
+            )
 
 
 class AgentGetRefsValidationParser:
@@ -57,19 +73,30 @@ class AgentGetRefsValidationParser:
     def __init__(self, response: str):
         self.response = response 
     
-    def parse(self) -> Dict[str, Any]:
+    def parse(self) -> AgentParserResponse:
         if not "<output>" in self.response.lower() or not "</output>" in self.response.lower():
-            return {
-                "_instance": "error",
-                "error": f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
-            }
+            try:
+                import json
+                data: Dict[str, Any] = json.loads(self.response)
+
+                return AgentParserResponse(
+                    instance_="success",
+                    valid=self.valid_map.get(str(data.get("valid", True)).lower(), False),
+                    reasoning=data.get("reasoning", "")
+                )
+            
+            except:
+                return AgentParserResponse(
+                    instance_="error",
+                    error=f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
+                )
 
         match = re.search(r"<output>(.*?)</output>", self.response, re.DOTALL)
         if not match:
-            return {
-                "_instance": "error",
-                "error": f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
-            }
+            return AgentParserResponse(
+                instance_="error",
+                error=f"{str(OuputTagsNotFoundError.__name__)} {str(OuputTagsNotFoundError.__doc__)}"
+            )
         
         output_content = match.group(1).strip()
         try:
@@ -78,13 +105,14 @@ class AgentGetRefsValidationParser:
 
             print("[VALIDATION DATA JSON]", data)
 
-            return {
-                    "_instance": "success",
-                    "valid": self.valid_map.get(str(data.get("valid", True)).lower(), False),
-                    "reasoning": data.get("reasoning", "")
-            }
+            return AgentParserResponse(
+                instance_="success",
+                valid=self.valid_map.get(str(data.get("valid", True)).lower(), False),
+                reasoning=data.get("reasoning", "")
+            )
+        
         except json.JSONDecodeError:
-            return {
-                "_instance": "error",
-                "error": f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
-            }
+            return AgentParserResponse(
+                instance_="error",
+                error=f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"
+            )
