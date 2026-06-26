@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List, override, Tuple
+from typing import Optional, Dict, Any, List, override, Tuple    # type: ignore# type: ignore
 from difflib import SequenceMatcher
 import json
 
@@ -12,7 +12,7 @@ from miniml.inference.engines.openrouter_engine import get_response_openrouter
 
 from miniml.tools.toolreg import ToolRegistry, Tool, get_builtin_tools
 from miniml.ml.models import MODELS             # type: ignore
-from miniml.utils.utilities import format_messages, unpack_arguments, is_required_parameter, get_callable_args
+from miniml.utils.utilities import format_messages, unpack_arguments, is_required_parameter, get_callable_args      # type: ignore
 
 _models_globals: Dict[str, Dict[str, Any]] | Dict[Any, Any] = MODELS
 
@@ -442,13 +442,13 @@ class AgentMLPlanner(AgentRunnable):
             
 
 
-    def _validate(self, generated_response: str) -> LLMSingleResponse:
-        pass
+    def _validate(self, prompt: str) -> LLMSingleResponse:
+        return LLMSingleResponse(content=prompt)
     
     def _get_available_models(self) -> List[str]:
         return list(_models_globals.keys())
     
-    def _get_model(problem_type: str, model_name: str):
+    def _get_model(self, problem_type: str, model_name: str):
         return _models_globals[problem_type][model_name]
 
     def _record(self, stage: str, task: str, data: Any) -> None:
@@ -536,6 +536,30 @@ class AgentMLPlanner(AgentRunnable):
 
         return prompt  
     
+    # ──────────────────────────────────────────────────────────────────────── #
+    # FUZZY TOOL MATCHING
+    # ──────────────────────────────────────────────────────────────────────── #
     def _get_most_approximate_tool(self, tool_name: str) -> tuple[str, str]:
-        pass
+        _user_tools: list[str] = [tool.name for tool in self._user_tools]
+        _builtin_tools: list[str] = [tool.name for tool in self._builtin_tools]
+
+        best_match = ""
+        best_list_name = ""
+        best_score = 0.0
+
+        for value in _user_tools:
+            score = SequenceMatcher(None, tool_name.lower(), value.lower()).ratio()
+            if score > best_score:
+                best_score = score
+                best_match = value
+                best_list_name = "_user_tools"
+
+        for value in _builtin_tools:
+            score = SequenceMatcher(None, tool_name.lower(), value.lower()).ratio()
+            if score > best_score:
+                best_score = score
+                best_match = value
+                best_list_name = "_builtin_tools"
+
+        return best_match, best_list_name
     
