@@ -6,7 +6,7 @@ from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
 from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse, SubAgentParserResponse, SubAgentGenericResponse
 
-from miniml.parsers.AgentMLPlannerParser import SubAgentModelSelectionGenerationParser
+from miniml.parsers.AgentMLPlannerParser import SubAgentModelSelectionGenerationParser, SubAgentModelCrossValidationGenerationParser, SubAgentModelOptimizationGenerationParser
 from miniml.inference.engines.ollama_engine import get_response_ollama
 from miniml.inference.engines.openrouter_engine import get_response_openrouter
 
@@ -120,15 +120,15 @@ class AgentMLPlanner(AgentRunnable):
             inject_tools=False
         )
 
-        self._base_generation_prompt_for_ml_planner_model_evaluation = self._load_prompt(
+        self._base_generation_prompt_for_ml_planner_model_cross_validation = self._load_prompt(
             self.PROMPT_PATHS["prompts_generation"],
-            "base_generation_prompt_for_ml_planner_model_evaluation",
+            "base_generation_prompt_for_ml_planner_model_cross_validation",
             inject_tools=False
         )
 
-        self._retry_generation_prompt_for_ml_planner_model_evaluation = self._load_prompt(
+        self._retry_generation_prompt_for_ml_planner_model_cross_validation = self._load_prompt(
             self.PROMPT_PATHS["prompts_generation"],
-            "retry_generation_prompt_for_ml_planner_model_evaluation",
+            "retry_generation_prompt_for_ml_planner_model_cross_validation",
             inject_tools=False
         )
 
@@ -212,24 +212,27 @@ class AgentMLPlanner(AgentRunnable):
             _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_selection
             _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_selection
 
-            PARSER_CLASS = SubAgentModelSelectionGenerationParser
+            _parser_cls = SubAgentModelSelectionGenerationParser
             _stage = "ml-model-selection"
+            _task = "ml_model_selection"
         
-        elif sub_agent_task == "model-evaluation":
-            # TODO: fix
-            _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_evaluation
-            _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_evaluation
+        elif sub_agent_task == "model-cross-validation":
+            
+            _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_cross_validation
+            _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_cross_validation
 
-            PARSER_CLASS = SubAgentModelEvaluationGenerationParser
-            _stage = "ml-model-evaluation"
+            _parser_cls = SubAgentModelCrossValidationGenerationParser
+            _stage = "ml-model-cross-evaluation"
+            _task = "ml_model_cross_validation"
         
         elif sub_agent_task == "model-optimization":
             # TODO: fix
             _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_optimization
             _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_optimization
 
-            PARSER_CLASS = SubAgentModelOptimizationGenerationParser
+            _parser_cls = SubAgentModelOptimizationGenerationParser
             _stage = "ml-model-optimization"
+            _task = "ml_model_optimization"
         
         else:
             raise ValueError(f"Invalid sub-agent task: {sub_agent_task}")
@@ -238,6 +241,7 @@ class AgentMLPlanner(AgentRunnable):
         assert _base_generation_prompt is not None
         assert _retry_generation_prompt is not None
         assert _stage is not None
+        assert _task is not None
 
         
         # common loop
@@ -251,7 +255,7 @@ class AgentMLPlanner(AgentRunnable):
                 history: str = format_messages(
                     self.message_history.get_by_stage_and_task(
                         stage="ml_modelling",
-                        task="ml_model_selection",
+                        task=_task,
                     )
                 )
 
@@ -290,39 +294,73 @@ class AgentMLPlanner(AgentRunnable):
                 continue
 
             assert type(response_generated.content) == str
-            assert PARSER_CLASS is not None     # type: ignore
+            assert _parser_cls is not None     # type: ignore
 
-            assert issubclass(PARSER_CLASS, SubAgentModelSelectionGenerationParser)    # type: ignore
+            assert (
+                issubclass(_parser_cls, SubAgentModelSelectionGenerationParser) or 
+                issubclass(_parser_cls, SubAgentModelCrossValidationGenerationParser) or 
+                issubclass(_parser_cls, SubAgentModelOptimizationGenerationParser) 
+            ), f"Invalid parser class: {_parser_cls}" 
 
-            _gen_parser: SubAgentModelSelectionGenerationParser = PARSER_CLASS(
-                response=response_generated.content
-            )
-
-            _parsed_data: SubAgentParserResponse = _gen_parser.parse()
-
-            _dbg(f" {sub_agent_task} PARSED DATA", str(_parsed_data))
-
-            if _parsed_data.instance_ == "error":
-                
-                assert _parsed_data.error is not None
-
-                self._record_error(
-                    stage=_stage,
-                    task="generation",
-                    exc=_parsed_data.error if isinstance(_parsed_data.error, Exception) else Exception(_parsed_data.error),
+            if issubclass(_parser_cls, SubAgentModelSelectionGenerationParser):
+                _gen_parser_model_selection: SubAgentModelSelectionGenerationParser = _parser_cls(
+                    response=response_generated.content
                 )
-                _dbg("ERROR", _parsed_data.error)
-                continue
 
-            _dbg(f"{_stage}: PARSED_DATA", str(_parsed_data))
+                _parsed_data: SubAgentParserResponse = _gen_parser_model_selection.parse()
 
-            if not validation:
-                return SubAgentGenericResponse(
-                    instance_="success",
-                    stage=_stage,
-                    data=_parsed_data
+                _dbg(f" {sub_agent_task} PARSED DATA", str(_parsed_data))
+
+                if _parsed_data.instance_ == "error":
+                    
+                    assert _parsed_data.error is not None
+
+                    self._record_error(
+                        stage=_stage,
+                        task="generation",
+                        exc=_parsed_data.error if isinstance(_parsed_data.error, Exception) else Exception(_parsed_data.error),
+                    )
+                    _dbg("ERROR", _parsed_data.error)
+                    continue
+
+                _dbg(f"{_stage}: PARSED_DATA", str(_parsed_data))
+
+                if not validation:
+                    return SubAgentGenericResponse(
+                        instance_="success",
+                        stage=_stage,
+                        data=_parsed_data
+                    )
+            
+            elif issubclass(_parser_cls, SubAgentModelCrossValidationGenerationParser):
+                _gen_parser_cross_validation: SubAgentModelCrossValidationGenerationParser = _parser_cls(
+                    response=response_generated.content
                 )
-  
+
+                _parsed_data: SubAgentParserResponse = _gen_parser_cross_validation.parse()
+
+                _dbg(f" {sub_agent_task} PARSED DATA", str(_parsed_data))
+
+                if _parsed_data.instance_ == "error":
+                    assert _parsed_data.error is not None
+
+                    self._record_error(
+                        stage=_stage,
+                        task="generation",
+                        exc=_parsed_data.error if isinstance(_parsed_data.error, Exception) else Exception(_parsed_data.error),
+                    )
+                    _dbg("ERROR", _parsed_data.error)
+                    continue
+
+                _dbg(f"{_stage}: PARSED_DATA", str(_parsed_data))
+
+                if not validation:
+                    return SubAgentGenericResponse(
+                        instance_="success",
+                        stage=_stage,
+                        data=_parsed_data
+                    )
+    
 
         
 
@@ -335,6 +373,7 @@ class AgentMLPlanner(AgentRunnable):
 
             tries += 1
 
+            # Model Selection
             if _USE_LLM:
                 # SUB-AGENT 1: Run ML model selector
                 sub_agent_data: SubAgentGenericResponse | None = self._run_sub_agent(
@@ -351,7 +390,7 @@ class AgentMLPlanner(AgentRunnable):
                 _stage: str = sub_agent_data.stage
                 _data: SubAgentParserResponse | Any | None = sub_agent_data.data
 
-                if type(_data) == SubAgentParserResponse:
+                if type(_data) == SubAgentParserResponse and _stage == "model-selection":
                     assert _data is not None
 
                     if _data.instance_ == "error":
@@ -371,7 +410,41 @@ class AgentMLPlanner(AgentRunnable):
                     if self.use_llm:
                         self.final_ml_models = _data.models if isinstance(_data.models, list) else self.ml_models
             
+            # Model Cross Vlidation Strategy
             if _USE_LLM:
+                sub_agent_data: SubAgentGenericResponse | None = self._run_sub_agent(
+                    sub_agent_task="model-cross-validation",
+                    validation=False
+                )
+
+                if sub_agent_data is None:
+                    continue
+
+                _dbg("SUB-AGENT DATA", str(sub_agent_data))
+                
+                _instance: str = sub_agent_data.instance_
+                _stage: str = sub_agent_data.stage
+                _data: SubAgentParserResponse | Any | None = sub_agent_data.data
+
+                if type(_data) == SubAgentParserResponse and _stage == "model-cross-validation":
+                    assert _data is not None
+
+                    if _data.instance_ == "error":
+                        assert _data.error is not None
+
+                        self._record_error(
+                            stage=_stage,
+                            task="generation",
+                            exc=_data.error if isinstance(_data.error, Exception) else Exception(_data.error),
+                        )
+                        _dbg("ERROR", _data.error)
+                        continue
+
+                    _dbg(f"{_stage}: PARSED_DATA", str(_data))
+
+                    
+
+            break
 
                     
 

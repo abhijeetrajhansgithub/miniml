@@ -38,7 +38,9 @@ MessageTask = Literal[
     "proc_end_validation_failure",
     "tool_execution",
     "error",
-    "ml_model_selection"
+    "ml_model_selection",
+    "ml_model_cross_validation",
+    "ml_model_optimization"
 ]
 
 

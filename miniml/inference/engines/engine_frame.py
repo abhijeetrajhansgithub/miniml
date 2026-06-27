@@ -213,6 +213,7 @@ class LLMSingleResponse:
 @dataclass(slots=True)
 class SubAgentParserResponse:
     instance_: str
+    strategy: str | None = None
     models: List[str] | List[Any] | None = None
     error: str | None = None
 
@@ -238,3 +239,89 @@ class AgentGetRefsIOResponse:
     imputation_reasoning: str | None = None
     outlier_strategy: str | None = None
     outlier_reasoning: str | None = None
+
+
+# --------------------
+# Cross Validation
+# --------------------
+
+@dataclass(slots=True)
+class CVConfig:
+    strategy: str | Any
+
+
+@dataclass(slots=True)
+class KFoldConfig(CVConfig):
+    strategy: Literal["kfold"] = "kfold"
+
+    n_splits: int = 5
+    shuffle: bool = True
+    random_state: int | None = 42
+
+
+@dataclass(slots=True)
+class StratifiedKFoldConfig(CVConfig):
+    strategy: Literal["stratified_kfold"] = "stratified_kfold"
+
+    n_splits: int = 5
+    shuffle: bool = True
+    random_state: int | None = 42
+
+
+@dataclass(slots=True)
+class RepeatedKFoldConfig(CVConfig):
+    strategy: Literal["repeated_kfold"] = "repeated_kfold"
+
+    n_splits: int = 5
+    n_repeats: int = 10
+    random_state: int | None = 42
+
+
+
+@dataclass(slots=True)
+class RepeatedStratifiedKFoldConfig(CVConfig):
+    strategy: Literal["repeated_stratified_kfold"] = "repeated_stratified_kfold"
+
+    n_splits: int = 5
+    n_repeats: int = 10
+    random_state: int | None = 42
+
+
+@dataclass(slots=True)
+class LeaveOneOutConfig(CVConfig):
+    strategy: Literal["leave_one_out"] = "leave_one_out"
+
+
+@dataclass(slots=True)
+class LeavePOutConfig(CVConfig):
+    strategy: Literal["leave_p_out"] = "leave_p_out"
+
+    p: int = 2
+
+
+@dataclass(slots=True)
+class GroupKFoldConfig(CVConfig):
+    strategy: Literal["group_kfold"] = "group_kfold"
+
+    n_splits: int = 5
+
+
+@dataclass(slots=True)
+class StratifiedGroupKFoldConfig(CVConfig):
+    strategy: Literal["stratified_group_kfold"] = "stratified_group_kfold"
+
+    n_splits: int = 5
+    shuffle: bool = True
+    random_state: int | None = 42
+
+
+CrossValidationConfig = (
+    KFoldConfig
+    | StratifiedKFoldConfig
+    | RepeatedKFoldConfig
+    | RepeatedStratifiedKFoldConfig
+    | LeaveOneOutConfig
+    | LeavePOutConfig
+    | GroupKFoldConfig
+    | StratifiedGroupKFoldConfig
+)

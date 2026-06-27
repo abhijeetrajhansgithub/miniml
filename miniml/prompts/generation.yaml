@@ -122,7 +122,7 @@ retry_generation_prompt_for_apply_refs: |
 
 
 base_generation_prompt_for_ml_planner_model_selection: |
-  You are an expert in machiine learning modeling. Your task is to pick the right models for the dataset.
+  You are an expert in machine learning modeling. Your task is to pick the right models for the dataset.
   The task for the project is [task].
 
   Pick the suitable ML models for thee given task.
@@ -149,20 +149,49 @@ base_generation_prompt_for_ml_planner_model_selection: |
   </output>
 
 
-
-
-
 retry_generation_prompt_for_ml_planner_model_selection: |
   The previous attempt failed. Please try again.
   History for the previous attempt:
   [HISTORY]
 
 
-base_generation_prompt_for_ml_planner_model_evaluation: |
-  pass 
+base_generation_prompt_for_ml_planner_model_cross_validation: |
+  You are an expert in machiine learning modeling and cross validation. Your task is to pick the right cross validation strategy for the dataset.
+  The task for the project is [task].
+
+  Pick the suitable cross validation strategy for thee given task.
+  Options: 
+    1. KFold
+    2. StratifiedKFold
+    3. RepeatedKFold
+    4. RepeatedStratifiedKFold
+    5. LeaveOneOut
+    6. LeavePOut
+    7. GroupKFold
+    8. StratefiedGroupKFold
+
+  Here is the memory that is needed:
+  [AGENT_MEMORY]
+
+  Here is the context for the data:
+  [DATA]
+
+  ---
+  OUTPUT FORMAT
+  - do not give any code implementation
+  - strictly give the output that is asked
+  - output json should strictly be inside <output> ... </output> tags
+  - Choose atleast two models
+
+  Return a JSON object with the following structure:
+  <output>
+  {
+    "strategy": "string"
+  }
+  </output>
 
 
-retry_generation_prompt_for_ml_planner_model_evaluation: |
+retry_generation_prompt_for_ml_planner_model_cross_validation: |
   The previous attempt failed. Please try again.
   History for the previous attempt:
   [HISTORY]
@@ -170,7 +199,7 @@ retry_generation_prompt_for_ml_planner_model_evaluation: |
 
 base_generation_prompt_for_ml_planner_model_optimization: |
   pass
-  
+
 
 retry_generation_prompt_for_ml_planner_model_optimization: |
   The previous attempt failed. Please try again.
