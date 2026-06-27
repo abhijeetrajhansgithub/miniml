@@ -1,7 +1,7 @@
 # messages.py
 
 from dataclasses import dataclass, field
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Any, Set, Tuple
 
 
 # ==========================================================
@@ -399,11 +399,11 @@ class MessageHistory:
         ]
 
         if unique:
-            seen = set()
-            unique_messages = []
+            seen: Set[Tuple[MessageRole, str, MessageStage | None, MessageTask | None]] = set()
+            unique_messages: List[TaggedMessage] = []
 
             for msg in messages:
-                key = (
+                key: Tuple[MessageRole, str, MessageStage | None, MessageTask | None] = (
                     msg.role,
                     msg.content,
                     msg.stage,
