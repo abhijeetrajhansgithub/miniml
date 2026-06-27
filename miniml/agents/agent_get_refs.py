@@ -2,8 +2,8 @@ from typing import Optional, Dict, Any, List
 from difflib import SequenceMatcher
 
 from miniml.agents.agent import AgentRunnable
-from miniml._messages.messages import MessageHistory, MessageRole, MessageType, BaseMessage, AgentMessage
-from miniml.inference.engines.engine_frame import GetRefsEngineFrame
+from miniml._messages.messages import MessageHistory, TaggedMessage, AgentMessage
+from miniml.inference.engines.engine_frame import GetRefsEngineFrame, LLMResponse, LLMSingleResponse, AgentGetRefsIOResponse, AgentParserResponse
 
 from miniml.parsers.AgentGetRefsParser import AgentGetRefsGenerationParser, AgentGetRefsValidationParser
 
@@ -11,6 +11,7 @@ from miniml.inference.engines.ollama_engine import get_response_ollama
 from miniml.inference.engines.openrouter_engine import get_response_openrouter
 
 from miniml.tools.toolreg import ToolRegistry, Tool, get_builtin_tools
+from miniml.utils.utilities import format_messages, unpack_arguments, is_required_parameter, get_callable_args      # type: ignore
 
 _builtin_tools_names = get_builtin_tools()
 
@@ -42,10 +43,10 @@ class AgentGetRefs(AgentRunnable):
     }
 
     def __init__(self,
-        _parent_base_dir_path: str = None,
-        column_data: pd.DataFrame = None,
-        column: str = None,
-        feature_type: str = None,
+        _parent_base_dir_path: str | None = None,
+        column_data: pd.DataFrame | None = None,
+        column: str | None = None,
+        feature_type: str | None = None,
         use_validator: bool = True,
         provider: str | None = None,
         model: str | None = None,
@@ -171,28 +172,30 @@ class AgentGetRefs(AgentRunnable):
 
             _dbg("[GENERATED PROMPT FINAL]", current_gen_prompt)
 
-            response_generated = self._generate(
+            response_generated: LLMSingleResponse = self._generate(
                 prompt=current_gen_prompt
             )
 
-            _dbg("RESPONSE", response_generated)
+            _dbg("RESPONSE", str(response_generated))
 
-            _gen_parser = AgentGetRefsGenerationParser(
-                response=response_generated
+            _gen_parser: AgentGetRefsGenerationParser = AgentGetRefsGenerationParser(
+                response=response_generated.content if type(response_generated.content) is str else ""
             )
 
-            _parsed_data: Dict[str, Any] = _gen_parser.parse()
+            _parsed_data: AgentParserResponse = _gen_parser.parse()
 
-            if _parsed_data.get("_instance") == "error":
+            if _parsed_data.instance_ == "error":
+                assert _parsed_data.error is not None
+
                 self._record_error(
                     stage="get-refs-generation",
                     task="generation",
-                    exc=_parsed_data.get("error")
+                    exc=_parsed_data.error if type(_parsed_data.error) is Exception else Exception(_parsed_data.error)  # type: ignore
                 )
-                _dbg("ERROR", _parsed_data.get("error"))
+                _dbg("ERROR", _parsed_data.error)
                 continue
 
-            _dbg("PARSED_DATA", _parsed_data)
+            _dbg("PARSED_DATA", str(_parsed_data))
 
             # FIX 1: capture _first_instance as soon as we have a valid parse,
             # regardless of whether the validator is on
@@ -202,10 +205,24 @@ class AgentGetRefs(AgentRunnable):
                     "data": GetRefsEngineFrame(
                         column_name=self.column,
                         column_type=self.feature_type,
-                        imputation_strategy=_parsed_data.get("imputation_strategy"),
-                        imputation_reasoning=_parsed_data.get("imputation_reasoning"),
-                        outlier_strategy=_parsed_data.get("outlier_strategy"),
-                        outlier_reasoning=_parsed_data.get("outlier_reasoning")
+                        imputation_strategy=(
+                            _parsed_data.data.imputation_strategy or ""
+                            if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                            else ""
+                        ),
+                        imputation_reasoning=(
+                            _parsed_data.data.imputation_reasoning or ""
+                            if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                            else ""
+                        ),
+                        outlier_strategy=(_parsed_data.data.outlier_strategy or ""
+                            if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                            else ""
+                        ),
+                        outlier_reasoning=(_parsed_data.data.outlier_reasoning or ""
+                            if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                            else ""
+                        )
                     )
                 }
 
@@ -240,39 +257,69 @@ class AgentGetRefs(AgentRunnable):
             )
 
             current_val_prompt = current_val_prompt.replace(
-                "[OUTPUT]", response_generated
+                "[OUTPUT]", response_generated.content if type(response_generated.content) is str else ""
             )
 
             _dbg("[VALIDATION PROMPT OUTPUT]", current_val_prompt)
 
-            response_validated = self._validate(
+            response_validated: LLMSingleResponse = self._validate(
                 prompt=current_val_prompt
             )
 
-            _dbg("VALIDATION", response_validated)
+            _dbg("VALIDATION", str(response_validated))
 
-            _val_parser = AgentGetRefsValidationParser(
-                response=response_validated
+            _val_parser: AgentGetRefsValidationParser = AgentGetRefsValidationParser(
+                response=response_validated.content if type(response_validated.content) is str else ""
             )
-            _val_result = _val_parser.parse()
+            _val_result: AgentParserResponse = _val_parser.parse()
 
-            _dbg("VALIDATION_RESULT [PARSED]", _val_result)
+            _dbg("VALIDATION_RESULT [PARSED]", str(_val_result))
 
-            if _val_result.get("_instance") == "error":
+            if _val_result.instance_ == "error":
+                prev_imputation = (
+                    _parsed_data.data.imputation_strategy or ""
+                    if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                    else ""
+                )
+
+                prev_outlier = (
+                    _parsed_data.data.outlier_strategy or ""
+                    if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                    else ""
+                )
+
                 self._record_error(
                     stage="validation",
                     task="validation",
-                    exc=_val_result.get("error") + f" Previous Response: {_parsed_data["imputation_strategy"]} and {_parsed_data["outlier_strategy"]}"
+                    exc=Exception(
+                        f"{_val_result.error or ''}. "
+                        f"Previous Response: {prev_imputation} and {prev_outlier}"
+                    )
                 )
-                _dbg("ERROR", _val_result.get("error"))
+                _dbg("ERROR", _val_result.error or "")
                 continue
 
-            if _val_result.get("_instance") == "success":
-                if _val_result.get("valid") is False:
+            if _val_result.instance_ == "success":
+                if _val_result.valid is False:
+                    prev_imputation = (
+                        _parsed_data.data.imputation_strategy or ""
+                        if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                        else ""
+                    )
+
+                    prev_outlier = (
+                        _parsed_data.data.outlier_strategy or ""
+                        if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                        else ""
+                    )
+
                     self._record(
                         stage="get-refs-validation",
                         task="validation",
-                        data=_val_result.get("reasoning")  + f" Previous Response: {_parsed_data["imputation_strategy"]} and {_parsed_data["outlier_strategy"]}"
+                        data=(
+                            f"{_val_result.reasoning or ''} "
+                            f"Previous Response: {prev_imputation} and {prev_outlier}"
+                        )
                     )
                 else:
                     return {
@@ -280,10 +327,24 @@ class AgentGetRefs(AgentRunnable):
                         "data": GetRefsEngineFrame(
                             column_name=self.column,
                             column_type=self.feature_type,
-                            imputation_strategy=_parsed_data.get("imputation_strategy"),
-                            imputation_reasoning=_parsed_data.get("imputation_reasoning"),
-                            outlier_strategy=_parsed_data.get("outlier_strategy"),
-                            outlier_reasoning=_parsed_data.get("outlier_reasoning")
+                            imputation_strategy=(
+                                _parsed_data.data.imputation_strategy or ""
+                                if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                                else ""
+                            ),
+                            imputation_reasoning=(
+                                _parsed_data.data.imputation_reasoning or ""
+                                if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                                else ""
+                            ),
+                            outlier_strategy=(_parsed_data.data.outlier_strategy or ""
+                                if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                                else ""
+                            ),
+                            outlier_reasoning=(_parsed_data.data.outlier_reasoning or ""
+                                if isinstance(_parsed_data.data, AgentGetRefsIOResponse)
+                                else ""
+                            )
                         )
                     }
 
@@ -295,7 +356,7 @@ class AgentGetRefs(AgentRunnable):
         _dbg("RUN", "Starting GetRefs agent run")
         return self._run_agent_loop()
 
-    def _call_llm(self, prompt: str, stage: str) -> Optional[str] | Dict[str, Any]:
+    def _call_llm(self, prompt: str, stage: str, use_tools: bool | None = None) -> LLMResponse:
         options: Dict[str, Any] = {
             "temperature": 0.7,
             "top_p": 0.9,
@@ -309,7 +370,7 @@ class AgentGetRefs(AgentRunnable):
                 result = get_response_ollama(prompt=prompt, model=self.model, options_dict=options)
                 message = result.get("message", {})
                 content = message.get("content", "")
-                raw_tool_calls = message.get("tool_calls") or []
+                raw_tool_calls: List[Any] = message.get("tool_calls") or []
 
             elif self.provider == "openrouter":
                 result = get_response_openrouter(prompt=prompt, model=self.model, options_dict=options)
@@ -356,7 +417,7 @@ class AgentGetRefs(AgentRunnable):
                     }
                 )
 
-        return content
+        return LLMResponse(content=content, tool_calls=raw_tool_calls)
 
 
     def _execute_tool(self, tool_response: Dict[str, Any]) -> Any | None:
@@ -368,50 +429,82 @@ class AgentGetRefs(AgentRunnable):
 
         if name.lower() not in TOOL_REGISTRY.get_tool_names():
             name, _ = self._get_most_approximate_tool(tool_name=name)
+        
+        arguments = unpack_arguments(data=arguments)
+        _dbg("ARGUMENTS", str(arguments))
+
+        all_args = dict(arguments)
 
         registered_tool: Tool = TOOL_REGISTRY.get_tool(name=name)
 
-        tool_result: pd.DataFrame | Any | None = registered_tool.func(**arguments)
+        filtered_args = get_callable_args(registered_tool.func, all_args)    # type: ignore
 
-        self._record(
-            stage="tool_execution",
-            task=name,
-            data={
-                "tool_name": name,
-                "tool_arguments": arguments,
-                "tool_result": tool_result,
-            }
-        )
+        try:
+            tool_result: pd.DataFrame | Any | None = registered_tool.func(**filtered_args)    # type: ignore
+
+            # Tagged as stage="tool_execution", task="tool_execution" so that
+            # proc-end validator can retrieve clean execution evidence via
+            # message_history.get_tagged_string(stage="tool_execution").
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=(
+                    tool_result
+                    if isinstance(tool_result, str)
+                    else f"Successfully used tool: {name} with args: {arguments}"
+                ),
+            )
+
+            if isinstance(tool_result, pd.DataFrame):
+                self.main_dataframe = tool_result
+        except:
+            self._record_tool_execution(
+                tool_name=name,
+                arguments=arguments,
+                result=f"Failed to execute tool: {name} with args: {arguments}",
+            )
 
 
-    def _generate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _generate(self, prompt: str, is_retry: bool = False) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
-        raw_response = self._call_llm(
+        _llm_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="generation"
         )
 
+        raw_response, _ = _llm_response.content, _llm_response.tool_calls
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        return raw_response
+        return LLMSingleResponse(
+            content=raw_response
+        )
 
 
-    def _validate(self, prompt: str) -> Optional[Dict[str, Any]] | str:
+    def _validate(self, prompt: str) -> LLMSingleResponse:
         assert prompt is not None, "Prompt cannot be None"
 
-        raw_response = self._call_llm(
+        _llm_val_response: LLMResponse = self._call_llm(
             prompt=prompt,
             stage="validation"
         )
 
+        raw_response, _ = _llm_val_response.content, _llm_val_response.tool_calls
+
         if raw_response is None:
             _dbg("GENERATE", "LLM returned None")
-            return None
+            return LLMSingleResponse(
+                content=None
+            )
 
-        return raw_response
+        return LLMSingleResponse(
+            content=raw_response
+        )
 
     def _record(self, stage: str, task: str, data: Any) -> None:
         _dbg("Recorder", f"Recording stage '{stage}', task '{task}', data: {data}")
@@ -422,6 +515,28 @@ class AgentGetRefs(AgentRunnable):
             AgentMessage(
                 role="assistant",
                 content=payload,
+            )
+        )
+
+    def _record_tool_execution(
+        self,
+        tool_name: str,
+        arguments: Any,
+        result: str,
+    ) -> None:
+        """Record a confirmed, successfully dispatched tool execution."""
+        content = str({
+            "tool_name": tool_name,
+            "tool_arguments": arguments,
+            "tool_result": result,
+        })
+        _dbg("Recorder", "tool_execution", content)
+        self.message_history.add_message(
+            TaggedMessage(
+                role="assistant",
+                content=content,
+                stage="tool_execution",
+                task="tool_execution",
             )
         )
 

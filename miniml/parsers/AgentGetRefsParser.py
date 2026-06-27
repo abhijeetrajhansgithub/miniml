@@ -1,6 +1,6 @@
 from typing import Dict, Any
 import re
-import json
+import json    # type: ignore
 from miniml.inference.engines.engine_frame import AgentParserResponse, AgentGetRefsIOResponse
 
 class OuputTagsNotFoundError(Exception):
@@ -111,7 +111,7 @@ class AgentGetRefsValidationParser:
                 reasoning=data.get("reasoning", "")
             )
         
-        except json.JSONDecodeError:
+        except json.JSONDecodeError:   # type: ignore
             return AgentParserResponse(
                 instance_="error",
                 error=f"{str(JSONParsingError.__name__)} {str(JSONParsingError.__doc__)}"

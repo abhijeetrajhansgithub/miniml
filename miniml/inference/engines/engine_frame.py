@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Any, Literal
+from typing import List, Tuple, Dict, Any, Literal   # type: ignore
 from dataclasses import dataclass
 
 @dataclass
