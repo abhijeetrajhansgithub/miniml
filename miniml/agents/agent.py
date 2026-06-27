@@ -1,6 +1,6 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple, List, 
+from typing import Any, Dict, Optional, Tuple, List  # type: ignore
 from miniml.inference.engines.engine_frame import LLMResponse, LLMSingleResponse
 
 
