@@ -4,7 +4,7 @@ import json
 
 from miniml.agents.agent import AgentRunnable
 from miniml._messages.messages import MessageHistory, TaggedMessage
-from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse, SubAgentParserResponse
+from miniml.inference.engines.engine_frame import DatasetContext, LLMResponse, LLMSingleResponse, SubAgentParserResponse, SubAgentGenericResponse
 
 from miniml.parsers.AgentMLPlannerParser import SubAgentModelSelectionGenerationParser
 from miniml.inference.engines.ollama_engine import get_response_ollama
@@ -119,6 +119,30 @@ class AgentMLPlanner(AgentRunnable):
             "retry_generation_prompt_for_ml_planner_model_selection",
             inject_tools=False
         )
+
+        self._base_generation_prompt_for_ml_planner_model_evaluation = self._load_prompt(
+            self.PROMPT_PATHS["prompts_generation"],
+            "base_generation_prompt_for_ml_planner_model_evaluation",
+            inject_tools=False
+        )
+
+        self._retry_generation_prompt_for_ml_planner_model_evaluation = self._load_prompt(
+            self.PROMPT_PATHS["prompts_generation"],
+            "retry_generation_prompt_for_ml_planner_model_evaluation",
+            inject_tools=False
+        )
+
+        self._base_generation_prompt_for_ml_planner_model_optimization = self._load_prompt(
+            self.PROMPT_PATHS["prompts_generation"],
+            "base_generation_prompt_for_ml_planner_model_optimization",
+            inject_tools=False
+        )
+
+        self._retry_generation_prompt_for_ml_planner_model_optimization = self._load_prompt(
+            self.PROMPT_PATHS["prompts_generation"],
+            "retry_generation_prompt_for_ml_planner_model_optimization",
+            inject_tools=False
+        )
         
         _models_default = ["random-forest", "xgboost"]
         if self.ml_models is None or (    # type: ignore
@@ -168,11 +192,16 @@ class AgentMLPlanner(AgentRunnable):
         self.model = model
         self.provider = provider
 
+        self.final_ml_models: List[str] | None = None
+
+        if not self.use_llm:
+            self.final_ml_models = self.ml_models
+
 
             
 
     
-    def _run_sub_agent(self, sub_agent_task: str, validation: bool) -> Dict[str, Any] | None:
+    def _run_sub_agent(self, sub_agent_task: str, validation: bool) -> SubAgentGenericResponse | None:
         tries = 0
 
         _base_generation_prompt: str | None = None
@@ -185,6 +214,25 @@ class AgentMLPlanner(AgentRunnable):
 
             PARSER_CLASS = SubAgentModelSelectionGenerationParser
             _stage = "ml-model-selection"
+        
+        elif sub_agent_task == "model-evaluation":
+            # TODO: fix
+            _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_evaluation
+            _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_evaluation
+
+            PARSER_CLASS = SubAgentModelEvaluationGenerationParser
+            _stage = "ml-model-evaluation"
+        
+        elif sub_agent_task == "model-optimization":
+            # TODO: fix
+            _base_generation_prompt = self._base_generation_prompt_for_ml_planner_model_optimization
+            _retry_generation_prompt = self._retry_generation_prompt_for_ml_planner_model_optimization
+
+            PARSER_CLASS = SubAgentModelOptimizationGenerationParser
+            _stage = "ml-model-optimization"
+        
+        else:
+            raise ValueError(f"Invalid sub-agent task: {sub_agent_task}")
         
 
         assert _base_generation_prompt is not None
@@ -238,7 +286,7 @@ class AgentMLPlanner(AgentRunnable):
 
             _dbg(f" {sub_agent_task} RESPONSE", str(response_generated))
 
-            if response_generated.content None:  # type: ignore
+            if response_generated.content is None:  # type: ignore
                 continue
 
             assert type(response_generated.content) == str
@@ -269,11 +317,11 @@ class AgentMLPlanner(AgentRunnable):
             _dbg(f"{_stage}: PARSED_DATA", str(_parsed_data))
 
             if not validation:
-                return {
-                    "_instance": "success",
-                    "stage": _stage,
-                    "data": _parsed_data
-                }
+                return SubAgentGenericResponse(
+                    instance_="success",
+                    stage=_stage,
+                    data=_parsed_data
+                )
   
 
         
@@ -289,13 +337,45 @@ class AgentMLPlanner(AgentRunnable):
 
             if _USE_LLM:
                 # SUB-AGENT 1: Run ML model selector
-                sub_agent_data = self._run_sub_agent(
+                sub_agent_data: SubAgentGenericResponse | None = self._run_sub_agent(
                     sub_agent_task="model-selection",
                     validation=False
                 )
 
+                if sub_agent_data is None:
+                    continue
+
                 _dbg("SUB-AGENT DATA", str(sub_agent_data))
-                break
+                
+                _instance: str = sub_agent_data.instance_
+                _stage: str = sub_agent_data.stage
+                _data: SubAgentParserResponse | Any | None = sub_agent_data.data
+
+                if type(_data) == SubAgentParserResponse:
+                    assert _data is not None
+
+                    if _data.instance_ == "error":
+                        assert _data.error is not None
+
+                        self._record_error(
+                            stage=_stage,
+                            task="generation",
+                            exc=_data.error if isinstance(_data.error, Exception) else Exception(_data.error),
+                        )
+                        _dbg("ERROR", _data.error)
+                        continue
+
+                    _dbg(f"{_stage}: PARSED_DATA", str(_data))
+
+                    # extract the models finally
+                    if self.use_llm:
+                        self.final_ml_models = _data.models if isinstance(_data.models, list) else self.ml_models
+            
+            if _USE_LLM:
+
+                    
+
+                
         pass 
 
     def run(self) -> Any:

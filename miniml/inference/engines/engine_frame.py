@@ -217,6 +217,12 @@ class SubAgentParserResponse:
     error: str | None = None
 
 @dataclass(slots=True)
+class SubAgentGenericResponse:
+    instance_: str
+    stage: str
+    data: SubAgentParserResponse | Any | None = None
+
+@dataclass(slots=True)
 class AgentParserResponse:
     instance_: str
     data: Any | None = None

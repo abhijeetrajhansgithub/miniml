@@ -144,7 +144,7 @@ base_generation_prompt_for_ml_planner_model_selection: |
   Return a JSON object with the following structure:
   <output>
   {
-    "model": "string""
+    "model": <list of model names>
   }
   </output>
 
@@ -157,3 +157,22 @@ retry_generation_prompt_for_ml_planner_model_selection: |
   History for the previous attempt:
   [HISTORY]
 
+
+base_generation_prompt_for_ml_planner_model_evaluation: |
+  pass 
+
+
+retry_generation_prompt_for_ml_planner_model_evaluation: |
+  The previous attempt failed. Please try again.
+  History for the previous attempt:
+  [HISTORY]
+
+
+base_generation_prompt_for_ml_planner_model_optimization: |
+  pass
+  
+
+retry_generation_prompt_for_ml_planner_model_optimization: |
+  The previous attempt failed. Please try again.
+  History for the previous attempt:
+  [HISTORY]

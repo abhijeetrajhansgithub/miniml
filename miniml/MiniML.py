@@ -111,7 +111,7 @@ class MiniML:
             self.llm_model: str = self.parsed_config.get("llm", {}).get("model", "")
             self.use_llm: bool = self.parsed_config.get("llm", {}).get("use_llm", False)
 
-            self.tts_split: tuple[Any, Any ] = self.parsed_config.get("tts", {}).get("split", (0.8, 0.2))
+            self.tts_split: str = self.parsed_config.get("tts", {}).get("split", "80:20")
 
             self.ml_models: list[Any] = self.parsed_config.get("ml", {}).get("models", [])
 
@@ -168,7 +168,7 @@ class MiniML:
                 data_file_path=self.data_path,
                 delimiter=self.delimiter,
                 encoding=self.encoding,
-                sheet_name=self.sheet_name,
+                sheet_name=self.sheet_name if self.sheet_name else 1,
                 provider=self.llm_provider,
                 model=self.llm_model,
                 use_llm=self.use_llm,
@@ -200,7 +200,9 @@ class MiniML:
                 usp_metrics=self.metrics,
                 iters=self.iters,
                 use_cross_validation=self.use_cv,
-                use_llm=self.use_llm
+                use_llm=self.use_llm,
+                model=self.llm_model,
+                provider=self.llm_provider,
             )
 
             ml_planner_agent.run()
