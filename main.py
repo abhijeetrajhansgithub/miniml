@@ -1,6 +1,6 @@
-from miniml.MiniML import MiniML
+from v1.miniml.MiniML import MiniML
 
-from miniml.tools.tool import tool
+from v1.miniml.tools.tool import tool
 
 @tool
 def fn_tool_get_target() -> str:
